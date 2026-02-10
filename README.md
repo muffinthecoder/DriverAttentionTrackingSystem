@@ -62,7 +62,7 @@ This project was developed as part of **ICT304 – Developing an AI System**.
 
 **Team Members:**
 - Fatima Faisal  
-- Pooja Gurnanin  
+- Pooja Gurnani
 - Minal Haque  
 
 ---
