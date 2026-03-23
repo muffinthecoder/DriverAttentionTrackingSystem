@@ -156,7 +156,7 @@ def clear2():
 
 def update_registration_count():
     res = 0
-    csv_path = get_path("StudentDetails/StudentDetails.csv")
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
     if os.path.isfile(csv_path):
         with open(csv_path, 'r', newline='') as f:
             reader = csv.reader(f)
@@ -169,10 +169,10 @@ def update_registration_count():
 def TakeImages():
     check_haarcascadefile()
     columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
-    assure_path_exists("StudentDetails")
+    assure_path_exists("DriverDetails")
     assure_path_exists("TrainingImage")
     serial = 0
-    csv_path = get_path("StudentDetails/StudentDetails.csv")
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
     if os.path.isfile(csv_path):
         with open(csv_path, 'r', newline='') as csvFile1:
             reader1 = csv.reader(csvFile1)
@@ -257,7 +257,7 @@ def getImagesAndLabels(path):
 def TrackImages():
     check_haarcascadefile()
     assure_path_exists("Attendance")
-    assure_path_exists("StudentDetails")
+    assure_path_exists("DriverDetails")
     for k in tv.get_children():
         tv.delete(k)
     i = 0
@@ -277,7 +277,7 @@ def TrackImages():
     font = cv2.FONT_HERSHEY_SIMPLEX
     col_names = ['Id', 'Name', 'Date', 'Time']
 
-    csv_path = get_path("StudentDetails/StudentDetails.csv")
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
     if os.path.isfile(csv_path):
         df = pd.read_csv(csv_path)
         # FIX: strip column names and drop empty columns
