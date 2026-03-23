@@ -1,70 +1,35 @@
-# DATS AI – Driver Attention Tracking System
+# Face_recognition_based_attendance_system
+A python GUI integrated attendance system using face recognition to take attendance.
 
-**Company:** Attenzen  
-**Product Name:** DATS AI (Driver Attention Tracking System AI)
+In this python project, I have made an attendance system which takes attendance by using face recognition technique. I have also intergrated it with GUI (Graphical user interface) so it can be easy to use by anyone. GUI for this project is also made on python using tkinter.
 
-DATS AI is an intelligent driver monitoring system designed to enhance road safety by continuously tracking driver attention, alertness, and identity.  
-The system integrates multiple AI-powered subsystems to detect risky driver behaviour in real time and support fleet management, transport companies, and safety-critical driving environments.
+TECHNOLOGY USED:
+1) tkinter for whole GUI
+2) OpenCV for taking images and face recognition (cv2.face.LBPHFaceRecognizer_create())
+3) CSV, Numpy, Pandas, datetime etc. for other purposes.
 
----
+FEATURES:
+1) Easy to use with interactive GUI support.
+2) Password protection for new person registration.
+3) Creates/Updates CSV file for details of students on registration.
+4) Creates a new CSV file everyday for attendance and marks attendance with proper date and time.
+5) Displays live attendance updates for the day on the main screen in tabular format with Id, name, date and time.
 
-## 🚗 System Overview
+### For more information:
+https://machinelearningprojects.net/face-recognition-based-attendance-system/
 
-DATS AI combines computer vision and machine learning techniques to monitor drivers through a camera-based system.  
-The system focuses on three core subsystems:
+# SCREENSHOTS
+MAIN SCREEN:
+![Screenshot (9)](https://user-images.githubusercontent.com/37211676/58502148-97ec2a00-81a3-11e9-963e-674b9c3e05dc.png)
 
-- 📱 Phone Usage Detection  
-- 😴 Drowsiness / Sleepiness Detection  
-- 🧑‍✈️ Driver Attendance & Face Recognition  
+TAKING ATTENDANCE:
+![Screenshot (10)](https://user-images.githubusercontent.com/37211676/58502149-97ec2a00-81a3-11e9-9658-8968da396c2e.png)
 
-Each subsystem operates independently but is designed to integrate into a single unified driver monitoring workflow.
+SHOWING ATTENDANCE TAKEN:
+![Screenshot (11)](https://user-images.githubusercontent.com/37211676/58502151-9884c080-81a3-11e9-9a90-fec29940ee5a.png)
 
----
+HELP OPTION IN MENUBAR:
+![Screenshot (12)](https://user-images.githubusercontent.com/37211676/58502152-991d5700-81a3-11e9-861a-9115526010c2.png)
 
-## 🧩 Subsystems
-
-### 1. Phone Usage Detection
-Detects whether a driver is using a mobile phone while driving.
-
-**Key features:**
-- Real-time object detection using a camera feed
-- Identifies phone presence 
-- Triggers alerts/logs when phone usage is detected
-- Designed to reduce distracted driving incidents
-
----
-
-### 2. Drowsiness / Sleepiness Detection
-Monitors driver alertness and fatigue levels.
-
-**Key features:**
-- Eye Aspect Ratio (EAR) and facial landmark analysis
-- Detects prolonged eye closure, yawning, and head nodding
-- Generates alerts when signs of drowsiness are detected
-- Helps prevent fatigue-related accidents
-
----
-
-### 3. Driver Attendance & Face Recognition
-Automatically identifies and records driver attendance using facial recognition.
-
-**Key features:**
-- Face detection and recognition at the start of a driving session
-- Logs driver identity and timestamps
-- Prevents unauthorised driver usage
-- Can be integrated with fleet attendance systems
-
----
-
-## 👥 Team & Contributors
-
-This project was developed as part of **ICT304 – Developing an AI System**.
-
-**Team Members:**
-- Fatima Faisal  
-- Pooja Gurnani
-- Minal Haque  
-
----
-© 2026 Attenzen. All rights reserved.
-
+CHANGE PASSWORD OPTION:
+![Screenshot (13)](https://user-images.githubusercontent.com/37211676/58502146-97539380-81a3-11e9-8536-0c68160ecc55.png)
