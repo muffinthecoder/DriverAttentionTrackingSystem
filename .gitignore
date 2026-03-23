@@ -1,8 +1,0 @@
-__pycache__/
-*.pyc
-.env
-.DS_Store
-.idea/
-.vscode/
-models/*.pt
-models/*.pkl
