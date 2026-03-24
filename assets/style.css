@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700&display=swap');
+
+/* ── Global ── */
+html, body, [class*="css"] {
+    font-family: 'Barlow', sans-serif;
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+}
+
+/* ── Header ── */
+.dms-header {
+    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    border-bottom: 2px solid #f97316;
+    padding: 1.2rem 2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.dms-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.8rem;
+    color: #f97316;
+    margin: 0;
+}
+.dms-subtitle {
+    font-size: 0.85rem;
+    color: #8b949e;
+}
+
+/* ── Metric Cards ── */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.metric-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 1.2rem;
+}
+.metric-card.phone::before { background: #f97316; }
+.metric-card.drowsy::before { background: #ef4444; }
+.metric-card.attend::before { background: #22c55e; }
+
+.card-title {
+    font-size: 0.7rem;
+    color: #8b949e;
+}
+.card-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2rem;
+}
+.card-sub {
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+
+/* ── Video panel ── */
+.video-panel {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background: #161b22 !important;
+}
+
+/* Buttons */
+.stButton>button {
+    background: #21262d;
+    color: white;
+    border-radius: 6px;
+}
+.stButton>button:hover {
+    border-color: #f97316;
+    color: #f97316;
+}
