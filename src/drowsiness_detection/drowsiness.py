@@ -1,11 +1,14 @@
 from scipy.spatial import distance
-from imutils import face_utils
-import imutils
-import dlib
 import cv2
 import numpy as np
 import time
+import mediapipe as mp
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision
+import urllib.request
 import os
+import subprocess
+import threading
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 def eye_aspect_ratio(eye):
@@ -66,106 +69,118 @@ print("Press 'S' to toggle sunglasses mode.")
 print("Press 'Q' to quit.")
 
 while True:
-        ret, frame = cap.read()
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        continue
 
-        if not ret or frame is None or frame.size == 0:
-                continue
+    # Resize frame for faster processing
+    frame = cv2.resize(frame, (450, int(frame.shape[0] * 450 / frame.shape[1])))
+    img_h, img_w = frame.shape[:2]
 
-        frame = imutils.resize(frame, width=450)
-        gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray  = np.ascontiguousarray(gray, dtype=np.uint8)
+    # Convert to RGB for MediaPipe
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        faces = face_detector.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=5,
-                minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE
-        )
+    # Run face landmark detection
+    detection = face_landmarker.detect(mp_image)
 
-        for (x, y, w, h) in faces:
-                rect  = dlib.rectangle(int(x), int(y), int(x + w), int(y + h))
-                shape = face_utils.shape_to_np(predictor(gray, rect))
+    # Default UI state each frame
+    current_alert = "Driver Alert"
+    alert_color   = (0, 200, 0)
+    ear = None
+    mar = None
 
-                # ── Eyes ─────────────────────────────────────────────────────
-                leftEye  = shape[lStart:lEnd]
-                rightEye = shape[rStart:rEnd]
-                ear      = (eye_aspect_ratio(leftEye) + eye_aspect_ratio(rightEye)) / 2.0
+    if detection.face_landmarks:
+        lm = detection.face_landmarks[0]
 
-                cv2.drawContours(frame, [cv2.convexHull(leftEye)],  -1, (0, 255, 0), 1)
-                cv2.drawContours(frame, [cv2.convexHull(rightEye)], -1, (0, 255, 0), 1)
+        # Calculate metrics
+        ear = (eye_aspect_ratio(lm, LEFT_EYE, img_w, img_h) +
+               eye_aspect_ratio(lm, RIGHT_EYE, img_w, img_h)) / 2.0
+        mar = mouth_aspect_ratio(lm, img_w, img_h)
 
-                # ── Mouth ─────────────────────────────────────────────────────
-                mar = mouth_aspect_ratio(shape)
-                cv2.drawContours(frame, [shape[48:60]], -1, (0, 255, 0), 1)
+        # --- YAWN DETECTION ---
+        if mar > YAWN_THRESH:
+            current_alert = "YAWNING - Stay Alert!"
+            alert_color   = (0, 140, 255)
 
-                # ── Head droop ────────────────────────────────────────────────
-                droop = head_droop_ratio(shape)
+            now = time.time()
+            if now > yawn_cooldown:
+                beep_then_speak(800, 200, "Yawn detected. Please stay alert.")
+                yawn_cooldown = now + 8
+                print(f"Yawn detected - MAR: {mar:.1f}")
 
-                # ── Choose mode ───────────────────────────────────────────────
-                if sunglasses_mode:
-                        mode   = "HEAD POSE [sunglasses mode]"
-                        drowsy = droop < HEAD_DROOP_THRESH
-                else:
-                        mode   = "EAR"
-                        drowsy = ear < EAR_THRESH
+        # --- EYES CLOSED DETECTION ---
+        if ear < EAR_THRESH:
+            if closed_start is None:
+                closed_start = time.time()
+                for k in alerts_fired:
+                    alerts_fired[k] = False
 
-                # ── On screen info ────────────────────────────────────────────
-                mode_color = (0, 165, 255) if sunglasses_mode else (255, 255, 0)
-                cv2.putText(frame, f"Mode: {mode}",
-                        (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, mode_color, 1)
-                cv2.putText(frame, f"EAR: {ear:.2f}  MAR: {mar:.1f}  Droop: {droop:.2f}",
-                        (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                cv2.putText(frame, "S: sunglasses mode  Q: quit",
-                        (10, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+            elapsed = time.time() - closed_start
 
-                # ── Yawn alert ────────────────────────────────────────────────
-                if mar > YAWN_THRESH:
-                        cv2.putText(frame, "Yawning Detected - Stay Alert!",
-                                (10, 55), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.6, (0, 165, 255), 2)
-                        print(f"Yawn detected - MAR: {mar:.1f}")
+            # Update UI state based on severity
+            if elapsed >= ALERT_GENTLE_SEC:
+                current_alert = "WARNING: Eyes Closing"
+                alert_color   = (0, 140, 255)
 
-                # ── Drowsiness timer ──────────────────────────────────────────
-                if drowsy:
-                        if closed_start is None:
-                                closed_start = time.time()
+            if elapsed >= ALERT_STRONG_SEC:
+                current_alert = "WARNING: DROWSY"
+                alert_color   = (0, 0, 220)
 
-                        elapsed = time.time() - closed_start
+            if elapsed >= ALERT_LOUD_SEC:
+                current_alert = "DANGER: VERY DROWSY"
+                alert_color   = (0, 0, 200)
 
-                        cv2.putText(frame, f"Eyes closed: {elapsed:.1f}s",
-                                (10, 75), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5, (255, 255, 255), 1)
+            if elapsed >= ALERT_AUTH_SEC:
+                current_alert = "CRITICAL: ALERTING FLEET"
+                alert_color   = (0, 0, 180)
 
-                        if elapsed >= ALERT_GENTLE_SEC:
-                                cv2.putText(frame, "Drowsy - Stay Alert",
-                                        (10, 100), cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.65, (0, 165, 255), 2)
+            # Fire audio/speech alerts (unchanged)
+            if elapsed >= ALERT_GENTLE_SEC and not alerts_fired["gentle"]:
+                beep_then_speak(1000, 400, "Stay alert.")
+                alerts_fired["gentle"] = True
 
-                        if elapsed >= ALERT_STRONG_SEC:
-                                cv2.putText(frame, "WARNING - Wake Up!",
-                                        (10, 130), cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.7, (0, 100, 255), 2)
+            if elapsed >= ALERT_STRONG_SEC and not alerts_fired["strong"]:
+                beep_then_speak(1200, 600, "Warning. Wake up!")
+                alerts_fired["strong"] = True
 
-                        if elapsed >= ALERT_LOUD_SEC:
-                                cv2.putText(frame, "!! DANGER - WAKE UP NOW !!",
-                                        (10, 160), cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.7, (0, 0, 255), 2)
+            if elapsed >= ALERT_LOUD_SEC and not alerts_fired["loud"]:
+                beep_then_speak(1500, 1000, "Danger! Wake up now!")
+                alerts_fired["loud"] = True
 
-                        if elapsed >= ALERT_AUTH_SEC:
-                                cv2.putText(frame, "!! ALERTING FLEET MANAGEMENT !!",
-                                        (10, 190), cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.6, (0, 0, 255), 2)
-                                print(f"CRITICAL: Driver drowsy for {elapsed:.0f}s - alerting authorities")
+            if elapsed >= ALERT_AUTH_SEC and not alerts_fired["auth"]:
+                beep_then_speak(1800, 1500, "Critical alert. Alerting fleet management.")
+                print(f"CRITICAL: Driver drowsy for {elapsed:.0f}s - alerting authorities")
+                alerts_fired["auth"] = True
 
-                else:
-                        closed_start = None
+        else:
+            # Eyes open — reset timer
+            closed_start = None
 
-        cv2.imshow("DATS+ Drowsiness Detection", frame)
+    else:
+        # No face detected
+        current_alert = "FACE NOT DETECTED"
+        alert_color   = (0, 0, 200)
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
-                break
-        elif key == ord("s"):
-                sunglasses_mode = not sunglasses_mode
-                print(f"Sunglasses mode: {'ON' if sunglasses_mode else 'OFF'}")
+        now = time.time()
+        if now > no_face_cooldown:
+            beep_then_speak(1000, 300, "Eyes not visible. Please remove obstruction.")
+            no_face_cooldown = now + 6
+            print("WARNING: Eyes not visible")
 
+    # Render UI overlay
+    frame = draw_ui(frame, current_alert, alert_color, ear, mar)
+
+    # Show window
+    cv2.imshow("DATS+ Drowsiness Detection", frame)
+
+    # Exit on Q
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+# Cleanup
 cv2.destroyAllWindows()
 cap.release()
+face_landmarker.close()
+ps_process.stdin.close()
+ps_process.terminate()
