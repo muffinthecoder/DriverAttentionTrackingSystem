@@ -1,4 +1,10 @@
-############################################# IMPORTING ################################################
+# This file contains the main code for the Attendance sub-system of DATS+
+# This code also contains an individual GUI in order to test just this unit alone later.
+# Code provided by: Pooja Gurnani
+# Additional credits: Code dependancies and GUI fixes by Fatima Faisal
+
+
+#Imports
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox as mess
@@ -11,7 +17,7 @@ import pandas as pd
 import datetime
 import time
 
-############################################# BASE DIRECTORY FIX ################################################
+#Base Directory Fix
 
 # This makes sure all files are always found relative to where main.py is saved
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,34 +25,26 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 def get_path(relative_path):
     return os.path.join(BASE_DIR, relative_path)
 
-############################################# FUNCTIONS ################################################
+#Functions
 
 def assure_path_exists(relative_path):
     full_path = get_path(relative_path)
     if not os.path.exists(full_path):
         os.makedirs(full_path)
 
-##################################################################################
-
 def tick():
     time_string = time.strftime('%H:%M:%S')
     clock.config(text=time_string)
     clock.after(200, tick)
 
-###################################################################################
-
 def contact():
     mess._show(title='Contact us', message="Please contact us on : 'xxxxxxxxxxxxx@gmail.com' ")
-
-###################################################################################
 
 def check_haarcascadefile():
     exists = os.path.isfile(get_path("haarcascade_frontalface_default.xml"))
     if not exists:
         mess._show(title='Some file missing', message='Please contact us for help')
         window.destroy()
-
-###################################################################################
 
 def save_pass():
     assure_path_exists("TrainingImageLabel")
@@ -83,8 +81,6 @@ def save_pass():
     mess._show(title='Password Changed', message='Password changed successfully!!')
     master.destroy()
 
-###################################################################################
-
 def change_pass():
     global master
     master = tk.Tk()
@@ -115,8 +111,6 @@ def change_pass():
     save1.place(x=10, y=120)
     master.mainloop()
 
-#####################################################################################
-
 def psw():
     assure_path_exists("TrainingImageLabel")
     exists1 = os.path.isfile(get_path("TrainingImageLabel/psd.txt"))
@@ -142,8 +136,6 @@ def psw():
     else:
         mess._show(title='Wrong Password', message='You have entered wrong password')
 
-######################################################################################
-
 def clear():
     txt.delete(0, 'end')
     message1.configure(text="1)Take Images  >>>  2)Save Profile")
@@ -151,8 +143,6 @@ def clear():
 def clear2():
     txt2.delete(0, 'end')
     message1.configure(text="1)Take Images  >>>  2)Save Profile")
-
-#######################################################################################
 
 def update_registration_count():
     res = 0
@@ -163,8 +153,6 @@ def update_registration_count():
             rows = [r for r in reader if any(field.strip() for field in r)]
         res = max(0, len(rows) - 1)  # subtract header
     message.configure(text='Total Registrations till now  : ' + str(res))
-
-#######################################################################################
 
 def TakeImages():
     check_haarcascadefile()
@@ -219,8 +207,6 @@ def TakeImages():
     else:
         message1.configure(text="Enter Correct name")
 
-########################################################################################
-
 def TrainImages():
     check_haarcascadefile()
     assure_path_exists("TrainingImageLabel")
@@ -237,8 +223,6 @@ def TrainImages():
     message1.configure(text="Profile Saved Successfully")
     update_registration_count()
 
-############################################################################################
-
 def getImagesAndLabels(path):
     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
     faces = []
@@ -251,8 +235,6 @@ def getImagesAndLabels(path):
         faces.append(imageNp)
         Ids.append(ID)
     return faces, Ids
-
-###########################################################################################
 
 def TrackImages():
     check_haarcascadefile()
@@ -354,7 +336,7 @@ def TrackImages():
 
     mess._show(title='Attendance Marked', message='Attendance marked successfully!')
 
-######################################## USED STUFFS ############################################
+#Keys
 
 global key
 key = ''
@@ -367,7 +349,7 @@ mont = {'01': 'January', '02': 'February', '03': 'March', '04': 'April',
         '05': 'May', '06': 'June', '07': 'July', '08': 'August',
         '09': 'September', '10': 'October', '11': 'November', '12': 'December'}
 
-######################################## GUI FRONT-END ###########################################
+# GUI front end - only kept for individual unit test
 
 window = tk.Tk()
 window.geometry("1280x720")
@@ -430,7 +412,7 @@ message.place(x=7, y=450)
 lbl3 = tk.Label(frame1, text="Attendance", width=20, fg="black", bg="#00aeff", height=1, font=('times', 17, ' bold '))
 lbl3.place(x=100, y=115)
 
-##################### MENUBAR #################################
+#Menu bar
 
 menubar = tk.Menu(window, relief='ridge')
 filemenu = tk.Menu(menubar, tearoff=0)
@@ -439,7 +421,7 @@ filemenu.add_command(label='Contact Us', command=contact)
 filemenu.add_command(label='Exit', command=window.destroy)
 menubar.add_cascade(label='Help', font=('times', 29, ' bold '), menu=filemenu)
 
-################## TREEVIEW ATTENDANCE TABLE ####################
+#Treeview Attendance Table
 
 tv = ttk.Treeview(frame1, height=13, columns=('name', 'date', 'time'))
 tv.column('#0', width=82)
@@ -452,13 +434,13 @@ tv.heading('name', text='NAME')
 tv.heading('date', text='DATE')
 tv.heading('time', text='TIME')
 
-###################### SCROLLBAR ################################
+#Scroll bar
 
 scroll = ttk.Scrollbar(frame1, orient='vertical', command=tv.yview)
 scroll.grid(row=2, column=4, padx=(0, 100), pady=(150, 0), sticky='ns')
 tv.configure(yscrollcommand=scroll.set)
 
-###################### BUTTONS ##################################
+#Buttons
 
 clearButton = tk.Button(frame2, text="Clear", command=clear, fg="black", bg="#ea2a2a", width=11,
                         activebackground="white", font=('times', 11, ' bold '))
@@ -479,7 +461,7 @@ quitWindow = tk.Button(frame1, text="Quit", command=window.destroy, fg="black", 
                        activebackground="white", font=('times', 15, ' bold '))
 quitWindow.place(x=30, y=450)
 
-##################### END ######################################
+#End
 
 # Load registration count on startup
 update_registration_count()
@@ -487,4 +469,3 @@ update_registration_count()
 window.configure(menu=menubar)
 window.mainloop()
 
-####################################################################################################
