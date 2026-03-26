@@ -76,6 +76,114 @@ section[data-testid="stSidebar"] {
     background: #161b22 !important;
 }
 
+/* ── About Us Tab ────────────────────────────────────────────────── */
+
+.about-wrapper {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 0;
+}
+
+.about-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.about-subtitle {
+    color: #888;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+.about-card {
+    background: #1a1a1a;
+    border-left: 4px solid #ff6600;
+    border-radius: 10px;
+    padding: 1.4rem 1.8rem;
+    margin-bottom: 2rem;
+}
+
+.about-card h3 {
+    color: #ff6600;
+    margin-top: 0;
+}
+
+.about-card p,
+.about-card li {
+    color: #ccc;
+    line-height: 1.7;
+}
+
+.about-card ul {
+    line-height: 2;
+}
+
+.about-card strong {
+    color: #fff;
+}
+
+.about-card em {
+    color: #ccc;
+}
+
+.team-grid {
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+
+.team-card {
+    flex: 1;
+    min-width: 220px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 1.4rem;
+    border-top: 3px solid #ff6600;
+}
+
+.team-card .team-emoji {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.team-card h4 {
+    margin: 0 0 0.3rem 0;
+    color: #fff;
+}
+
+.team-card .team-role {
+    color: #ff6600;
+    font-size: 0.85rem;
+    margin: 0 0 0.8rem 0;
+}
+
+.team-card p {
+    color: #aaa;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.about-disclaimer {
+    background: #1a1a1a;
+    border-radius: 10px;
+    padding: 1.4rem 1.8rem;
+    text-align: center;
+    border: 1px solid #333;
+}
+
+.about-disclaimer p {
+    color: #888;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.about-disclaimer span {
+    color: #555;
+}
+
 /* ── Buttons ── */
 .stButton>button {
     background: linear-gradient(135deg, #21262d, #30363d);
@@ -90,4 +198,20 @@ section[data-testid="stSidebar"] {
     border-color: #f97316;
     color: #f97316;
     transform: scale(1.03);
+}
+
+/*footer*/
+.footer {
+    text-align: center;
+    padding: 1.5rem 0 1rem 0;
+}
+
+.footer p {
+    font-size: 0.85rem;
+    color: #888;
+    margin: 0.2rem 0;
+}
+
+.footer strong {
+    color: #ccc;
 }

@@ -87,7 +87,7 @@ def TakeImages(user_id, user_name):
     cam = cv2.VideoCapture(0)
     sample_num = 0
 
-    while True:
+    while sample_num < 100:
         ret, img = cam.read()
         if not ret:
             break
@@ -99,13 +99,10 @@ def TakeImages(user_id, user_name):
                 f"TrainingImage/{user_name}.{serial}.{user_id}.{sample_num}.jpg"
             )
             cv2.imwrite(img_path, gray[y:y + h, x:x + w])
-            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.imshow("Capturing – press Q to stop early", img)
-        if cv2.waitKey(1) & 0xFF == ord('q') or sample_num >= 100:
-            break
+            if sample_num >= 100:
+                break
 
     cam.release()
-    cv2.destroyAllWindows()
 
     with open(csv_path, 'a+', newline='') as f:
         csv.writer(f).writerow([serial, '', user_id, '', user_name])

@@ -1,8 +1,7 @@
 # main.py
 
-# ----------------------------
 # STANDARD LIBRARIES
-# ----------------------------
+
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -16,57 +15,38 @@ import numpy as np
 import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
-# ----------------------------
 # SUBSYSTEMS
-# ----------------------------
+
 from phone_detection.phone_detection import process_phone_frame
 from drowsiness_detection.drowsiness import process_drowsiness_frame
 from attendance_system.face_detection import TakeImages, TrainImages, process_attendance_frame
 
-# ----------------------------
 # PAGE CONFIG
-# ----------------------------
-st.set_page_config(page_title="Driver Monitoring System", layout="wide")
+st.set_page_config(page_title="Driver Attention Tracking System (DATS+)", layout="wide")
 
-# ----------------------------
 # LOAD CSS
-# ----------------------------
 def load_css():
-    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets/style.css")
+    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "style.css")
     with open(css_path) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 load_css()
 
-# ----------------------------
-# HEADER + LOGO
-# ----------------------------
-col1, col2 = st.columns([1, 6])
+# HEADER
 
-with col1:
-    try:
-        st.image("assets/logo.png", width=80)
-    except Exception:
-        pass  # logo is optional
-
-with col2:
-    st.markdown("""
-    <div class="dms-header">
-        <div>
-            <h1 class="dms-title">Driver Monitoring System</h1>
-            <p class="dms-subtitle">AI-powered Safety Dashboard</p>
-        </div>
+st.markdown("""
+<div class="dms-header">
+    <div>
+        <h1 class="dms-title">Driver Attention Tracking System (DATS+)</h1>
+        <p class="dms-subtitle">AI-powered Safety Dashboard</p>
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-# ----------------------------
 # TABS
-# ----------------------------
-tab1, tab2 = st.tabs(["📸 Register Face", "📊 Monitoring"])
+tab1, tab2, tab3 = st.tabs(["📸 Register Face", "📊 Monitoring", "👥 About Us"])
 
-# ----------------------------
 # TAB 1: FACE REGISTRATION
-# ----------------------------
 with tab1:
     st.subheader("Register Driver")
     user_id   = st.text_input("Enter ID")
@@ -83,12 +63,10 @@ with tab1:
         msg = TrainImages()
         st.success(msg if msg else "Model Trained")
 
-# ----------------------------
 # TAB 2: MONITORING
-# ----------------------------
 with tab2:
 
-    # ── Live metric placeholders ──
+    # Live metric placeholders
     col1, col2, col3 = st.columns(3)
     phone_placeholder  = col1.empty()
     drowsy_placeholder = col2.empty()
@@ -101,27 +79,24 @@ with tab2:
 
     render_metrics()
 
+
     st.markdown("### Live Feed")
 
-    # ── Shared alert flags (accessed by the video processor) ──
+    # Shared alert flags (accessed by the video processor)
     if "alerts_flags" not in st.session_state:
         st.session_state.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
 
-    # ----------------------------
     # WEBRTC VIDEO PROCESSOR
-    # Uses OpenCV — runs in its own thread, no Streamlit conflict
-    # ----------------------------
+    # Uses OpenCV - need to change this later!!!
     class DriverMonitorProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
+
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-            # Convert incoming frame to a BGR numpy array (OpenCV format)
             img = frame.to_ndarray(format="bgr24")
-
-            # ── Run your OpenCV-based subsystems ──
-            img = process_phone_frame(img,      st.session_state.alerts_flags)
-            img = process_drowsiness_frame(img, st.session_state.alerts_flags)
-            img = process_attendance_frame(img, st.session_state.alerts_flags)
-
-            # Return processed frame back to the browser stream
+            img = process_phone_frame(img, self.alerts_flags)
+            img = process_drowsiness_frame(img, self.alerts_flags)
+            img = process_attendance_frame(img, self.alerts_flags)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     # ICE/STUN config — needed for WebRTC to work on most networks
@@ -137,7 +112,7 @@ with tab2:
         async_processing=True,
     )
 
-    # ── Refresh metrics while stream is active ──
+    # Refresh metrics while stream is active
     if webrtc_ctx.state.playing:
         if not stats.get("start_time"):
             stats["start_time"] = time.time()
@@ -151,9 +126,88 @@ with tab2:
         stats["end_time"] = time.time()
         render_metrics()
 
-# ----------------------------
+
+with tab3:
+    st.markdown(
+"""<div class="about-wrapper">
+
+<h2 class="about-title">About Team Attenzen</h2>
+<p class="about-subtitle">A student-led initiative building smarter, safer roads through AI.</p>
+
+<div class="about-card">
+<h3>🚗 The Problem We're Solving</h3>
+<p>Driver fatigue and inattentiveness are among the leading causes of road accidents worldwide.
+In commercial transport — taxis, public buses, trams, delivery trucks — drivers often work long
+shifts with little oversight. Employers have no reliable way to know if a driver is alert, or
+even present, at the wheel. Manual attendance systems are slow, error-prone, and easy to game.
+<br><br>
+<strong>Attenzen</strong> is our answer to that problem.</p>
+</div>
+
+<div class="about-card">
+<h3>🧠 What This System Does</h3>
+<p>The Driver Attention Tracking System (DATS) is a real-time, AI-powered monitoring platform
+designed as a <em>proof of concept</em> for commercial vehicle deployment. It combines three
+intelligent subsystems into a single unified dashboard:</p>
+<ul>
+<li><strong>Drowsiness Detection</strong> — monitors eye closure and blink rate to detect fatigue and trigger alerts before an incident occurs.</li>
+<li><strong>Phone Usage Detection</strong> — uses object detection to identify when a driver picks up or holds a mobile device while driving.</li>
+<li><strong>Automatic Attendance</strong> — recognises the registered driver's face at session start and logs their attendance without any manual input.</li>
+</ul>
+<p>All three run simultaneously on a live camera feed, with a session report generated at the
+end of every drive — giving fleet operators a clear, timestamped record of driver behaviour.</p>
+</div>
+
+<div class="about-card">
+<h3>🚌 Real-World Applications</h3>
+<p>While DATS is currently a proof of concept, the underlying technology is directly applicable to:</p>
+<ul>
+<li><strong>Ride-hailing & taxis</strong> — ensure drivers are who they claim to be and are alert throughout a trip.</li>
+<li><strong>Public buses & trams</strong> — monitor fatigue on long urban routes and flag incidents automatically.</li>
+<li><strong>Delivery & logistics</strong> — track driver hours accurately and reduce liability from distracted driving.</li>
+<li><strong>School transport</strong> — give parents and operators peace of mind on every route.</li>
+<li><strong>Long-haul trucking</strong> — combat highway fatigue, one of the deadliest risks in freight transport.</li>
+</ul>
+</div>
+
+<h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 1.2rem;">👩‍💻 Meet the Team</h3>
+
+<div class="team-grid">
+<div class="team-card">
+<div class="team-emoji">👩‍💻</div>
+<h4>Fatima Faisal</h4>
+<p class="team-role">Lead Developer & Systems Integrator</p>
+<p>Responsible for the overall system architecture, Streamlit dashboard,
+WebRTC integration, and connecting the three AI subsystems into a single
+cohesive pipeline. Handled CSS theming and deployment setup.</p>
+</div>
+<div class="team-card">
+<div class="team-emoji">👩‍🔬</div>
+<h4>Pooja Gurnani</h4>
+<p class="team-role">Attendance & Face Recognition Engineer</p>
+<p>Designed and built the face recognition attendance subsystem using
+OpenCV's LBPH algorithm. Implemented driver registration, model training,
+and real-time identity verification with CSV-based logging.</p>
+</div>
+<div class="team-card">
+<div class="team-emoji">👩‍🎓</div>
+<h4>Minal Haque</h4>
+<p class="team-role">Safety Detection & Alert Systems</p>
+<p>Developed the drowsiness detection and phone usage detection modules,
+combining facial landmark analysis and object detection to provide
+real-time safety alerts and session-level behavioural reporting.</p>
+</div>
+</div>
+
+<div class="about-disclaimer">
+<p>🎓 &nbsp;This project was developed as an academic proof of concept.<br>
+<span>DATS is not yet a commercial product. All detections are experimental
+and should not be relied upon for safety-critical decisions without
+further validation and regulatory approval.</span></p>
+</div>
+
+</div>""", unsafe_allow_html=True)
 # SESSION REPORT
-# ----------------------------
 st.markdown("### Session Report")
 duration = 0.0
 if stats.get("start_time") and stats.get("end_time"):
@@ -166,18 +220,12 @@ st.write(f"""
 - **Session Duration:** {duration:.2f} sec  
 """)
 
-# ----------------------------
 # FOOTER
-# ----------------------------
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 1.5rem 0 1rem 0;">
-    <img src="app/static/logo.png" width="55" style="margin-bottom: 0.6rem; opacity: 0.85;" />
-    <p style="font-size: 0.85rem; color: #888; margin: 0.2rem 0;">
-        Driver Monitoring System &nbsp;|&nbsp; AI-powered Safety Dashboard
-    </p>
-    <p style="font-size: 0.8rem; color: #aaa; margin: 0.4rem 0 0 0;">
-        Built by &nbsp;
+<div class="footer">
+    <p>Driver Attention Tracking System (DATS+) &nbsp;|&nbsp; AI-powered Safety Dashboard</p>
+    <p>Built by &nbsp;
         <strong>Fatima Faisal</strong> &nbsp;·&nbsp;
         <strong>Minal Haque</strong> &nbsp;·&nbsp;
         <strong>Pooja Gurnani</strong>
