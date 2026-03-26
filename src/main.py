@@ -1,293 +1,186 @@
+# main.py
+
+# ----------------------------
+# STANDARD LIBRARIES
+# ----------------------------
 import sys
 import os
-import cv2
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils import stats, announce_violation
+from camera import Camera, get_rgb_frame
+
+import streamlit as st
 import time
-import threading
+import cv2
 import numpy as np
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QStackedLayout, QFrame, QTextEdit
-)
-from PyQt5.QtGui import QPixmap, QImage, QFont, QPalette, QColor
-from PyQt5.QtCore import QTimer
-import pyttsx3
+import av
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
 # ----------------------------
-# AUDIO ALERT
+# SUBSYSTEMS
 # ----------------------------
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
-
-def announce_violation(msg):
-    threading.Thread(target=lambda: engine.say(msg) or engine.runAndWait()).start()
+from phone_detection.phone_detection import process_phone_frame
+from drowsiness_detection.drowsiness import process_drowsiness_frame
+from attendance_system.face_detection import TakeImages, TrainImages, process_attendance_frame
 
 # ----------------------------
-# GLOBAL VARIABLES
+# PAGE CONFIG
 # ----------------------------
-attendance_image_path = "attendance_dataset"
-if not os.path.exists(attendance_image_path):
-    os.makedirs(attendance_image_path)
-
-stats = {
-    "phone_count": 0,
-    "drowsy_count": 0,
-    "attendance_logged": False,
-    "start_time": None,
-    "end_time": None
-}
+st.set_page_config(page_title="Driver Monitoring System", layout="wide")
 
 # ----------------------------
-# METRIC CARD WIDGET
+# LOAD CSS
 # ----------------------------
-class MetricCard(QFrame):
-    def __init__(self, title, color):
-        super().__init__()
-        self.setFixedHeight(100)
-        self.setStyleSheet(f"""
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 10px;
-        """)
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+def load_css():
+    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets/style.css")
+    with open(css_path) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        self.layout.addWidget(self.title_label)
-
-        self.value_label = QLabel("0")
-        self.value_label.setStyleSheet(f"font-family: 'Share Tech Mono'; font-size: 24px; color: {color};")
-        self.layout.addWidget(self.value_label)
-
-    def update_value(self, val):
-        self.value_label.setText(str(val))
+load_css()
 
 # ----------------------------
-# PAGE 1: Attendance Photo
+# HEADER + LOGO
 # ----------------------------
-class AttendancePage(QWidget):
-    def __init__(self, parent_layout):
-        super().__init__()
-        self.parent_layout = parent_layout
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+col1, col2 = st.columns([1, 6])
 
-        # Header
-        self.header = QLabel("🚗 Driver Monitoring System\nAI Safety Dashboard")
-        self.header.setAlignment(Qt.AlignCenter)
-        self.header.setStyleSheet("""
-            font-family: 'Share Tech Mono';
-            font-size: 24px;
-            color: #f97316;
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                        stop:0 #161b22, stop:1 #0d1117);
-            padding: 15px;
-            border-bottom: 2px solid #f97316;
-        """)
-        self.layout.addWidget(self.header)
+with col1:
+    try:
+        st.image("assets/logo.png", width=80)
+    except Exception:
+        pass  # logo is optional
 
-        self.label = QLabel("Take your attendance photo")
-        self.label.setStyleSheet("color: #c9d1d9; font-size: 14px;")
-        self.layout.addWidget(self.label)
+with col2:
+    st.markdown("""
+    <div class="dms-header">
+        <div>
+            <h1 class="dms-title">Driver Monitoring System</h1>
+            <p class="dms-subtitle">AI-powered Safety Dashboard</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        self.capture_btn = QPushButton("Capture Photo")
-        self.capture_btn.setStyleSheet("""
-            background-color: #21262d;
-            color: white;
-            border-radius: 6px;
-            padding: 8px;
-        """)
-        self.capture_btn.clicked.connect(self.capture_photo)
-        self.layout.addWidget(self.capture_btn)
+# ----------------------------
+# TABS
+# ----------------------------
+tab1, tab2 = st.tabs(["📸 Register Face", "📊 Monitoring"])
 
-        self.next_btn = QPushButton("Next")
-        self.next_btn.setStyleSheet("""
-            background-color: #f97316;
-            color: white;
-            border-radius: 6px;
-            padding: 8px;
-        """)
-        self.next_btn.clicked.connect(self.go_next)
-        self.layout.addWidget(self.next_btn)
+# ----------------------------
+# TAB 1: FACE REGISTRATION
+# ----------------------------
+with tab1:
+    st.subheader("Register Driver")
+    user_id   = st.text_input("Enter ID")
+    user_name = st.text_input("Enter Name")
 
-        self.image_label = QLabel()
-        self.layout.addWidget(self.image_label)
-
-    def capture_photo(self):
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
-        cap.release()
-        if ret:
-            filename = os.path.join(attendance_image_path, f"user_{int(time.time())}.png")
-            cv2.imwrite(filename, frame)
-            self.image_label.setPixmap(self.cv2pixmap(frame))
-            stats['attendance_logged'] = True
-            announce_violation("Attendance photo captured")
+    if st.button("Capture Images"):
+        if user_id and user_name:
+            result = TakeImages(user_id, user_name)
+            st.success(result if result else "Images Captured")
         else:
-            self.label.setText("Failed to capture image, try again")
+            st.warning("Please enter both ID and Name.")
 
-    def cv2pixmap(self, img):
-        rgb_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        qimg = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        return QPixmap.fromImage(qimg)
-
-    def go_next(self):
-        self.parent_layout.setCurrentIndex(1)
-        stats['start_time'] = time.time()
+    if st.button("Train Model"):
+        msg = TrainImages()
+        st.success(msg if msg else "Model Trained")
 
 # ----------------------------
-# PAGE 2: Live Monitoring
+# TAB 2: MONITORING
 # ----------------------------
-class MonitoringPage(QWidget):
-    def __init__(self, parent_layout):
-        super().__init__()
-        self.parent_layout = parent_layout
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+with tab2:
 
-        # Video panel
-        self.video_panel = QFrame()
-        self.video_panel.setStyleSheet("""
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 10px;
-        """)
-        self.video_layout = QVBoxLayout()
-        self.video_panel.setLayout(self.video_layout)
-        self.layout.addWidget(self.video_panel)
+    # ── Live metric placeholders ──
+    col1, col2, col3 = st.columns(3)
+    phone_placeholder  = col1.empty()
+    drowsy_placeholder = col2.empty()
+    attend_placeholder = col3.empty()
 
-        self.video_label = QLabel()
-        self.video_layout.addWidget(self.video_label)
+    def render_metrics():
+        phone_placeholder.metric("Phone Time (s)",  f"{stats['phone_time']:.1f}")
+        drowsy_placeholder.metric("Drowsy Time (s)", f"{stats['drowsy_time']:.1f}")
+        attend_placeholder.metric("Attendance",      "Yes" if stats['attendance_logged'] else "No")
 
-        # Metrics cards
-        self.cards_layout = QHBoxLayout()
-        self.phone_card = MetricCard("Phones", "#f97316")
-        self.drowsy_card = MetricCard("Drowsiness", "#ef4444")
-        self.attendance_card = MetricCard("Attendance", "#22c55e")
-        self.cards_layout.addWidget(self.phone_card)
-        self.cards_layout.addWidget(self.drowsy_card)
-        self.cards_layout.addWidget(self.attendance_card)
-        self.layout.addLayout(self.cards_layout)
+    render_metrics()
 
-        # Stop button
-        self.stop_btn = QPushButton("Stop Monitoring")
-        self.stop_btn.setStyleSheet("""
-            background-color: #ef4444;
-            color: white;
-            border-radius: 6px;
-            padding: 8px;
-        """)
-        self.stop_btn.clicked.connect(self.stop_monitoring)
-        self.layout.addWidget(self.stop_btn)
+    st.markdown("### Live Feed")
 
-        # Video capture
-        self.cap = cv2.VideoCapture(0)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(30)
+    # ── Shared alert flags (accessed by the video processor) ──
+    if "alerts_flags" not in st.session_state:
+        st.session_state.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
 
-    def update_frame(self):
-        ret, frame = self.cap.read()
-        if ret:
-            # ----------------------------
-            # Placeholder: phone detection
-            if np.random.rand() < 0.01:
-                stats['phone_count'] += 1
-                announce_violation("Phone usage detected")
-                cv2.putText(frame, "PHONE", (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+    # ----------------------------
+    # WEBRTC VIDEO PROCESSOR
+    # Uses OpenCV — runs in its own thread, no Streamlit conflict
+    # ----------------------------
+    class DriverMonitorProcessor(VideoProcessorBase):
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            # Convert incoming frame to a BGR numpy array (OpenCV format)
+            img = frame.to_ndarray(format="bgr24")
 
-            # Placeholder: drowsiness detection
-            if np.random.rand() < 0.01:
-                stats['drowsy_count'] += 1
-                announce_violation("Drowsiness detected")
-                cv2.putText(frame, "DROWSY", (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+            # ── Run your OpenCV-based subsystems ──
+            img = process_phone_frame(img,      st.session_state.alerts_flags)
+            img = process_drowsiness_frame(img, st.session_state.alerts_flags)
+            img = process_attendance_frame(img, st.session_state.alerts_flags)
 
-            self.video_label.setPixmap(self.cv2pixmap(frame))
-            self.update_metrics()
+            # Return processed frame back to the browser stream
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    def cv2pixmap(self, img):
-        rgb_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        qimg = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        return QPixmap.fromImage(qimg)
+    # ICE/STUN config — needed for WebRTC to work on most networks
+    RTC_CONFIG = RTCConfiguration({
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    })
 
-    def update_metrics(self):
-        self.phone_card.update_value(stats['phone_count'])
-        self.drowsy_card.update_value(stats['drowsy_count'])
-        self.attendance_card.update_value("Yes" if stats['attendance_logged'] else "No")
+    webrtc_ctx = webrtc_streamer(
+        key="driver-monitor",
+        video_processor_factory=DriverMonitorProcessor,
+        rtc_configuration=RTC_CONFIG,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
 
-    def stop_monitoring(self):
-        self.timer.stop()
-        self.cap.release()
-        stats['end_time'] = time.time()
-        self.parent_layout.setCurrentIndex(2)
+    # ── Refresh metrics while stream is active ──
+    if webrtc_ctx.state.playing:
+        if not stats.get("start_time"):
+            stats["start_time"] = time.time()
+            stats["phone_time"]        = 0.0
+            stats["drowsy_time"]       = 0.0
+            stats["attendance_logged"] = False
+
+        render_metrics()
+
+    elif stats.get("start_time") and not stats.get("end_time"):
+        stats["end_time"] = time.time()
+        render_metrics()
 
 # ----------------------------
-# PAGE 3: Statistics
+# SESSION REPORT
 # ----------------------------
-class StatsPage(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+st.markdown("### Session Report")
+duration = 0.0
+if stats.get("start_time") and stats.get("end_time"):
+    duration = stats["end_time"] - stats["start_time"]
 
-        self.label = QLabel("Monitoring Report")
-        self.label.setStyleSheet("font-family: 'Share Tech Mono'; font-size: 18px; color: #f97316;")
-        self.layout.addWidget(self.label)
-
-        self.text = QTextEdit()
-        self.text.setReadOnly(True)
-        self.text.setStyleSheet("""
-            background-color: #161b22;
-            color: #c9d1d9;
-            border: 1px solid #30363d;
-            border-radius: 10px;
-        """)
-        self.layout.addWidget(self.text)
-
-        self.show_stats()
-
-    def show_stats(self):
-        duration = stats['end_time'] - stats['start_time'] if stats['end_time'] else 0
-        report = f"""
-Attendance logged: {'Yes' if stats['attendance_logged'] else 'No'}
-Monitoring duration: {duration:.1f} seconds
-Phone usage detected: {stats['phone_count']} times
-Drowsiness detected: {stats['drowsy_count']} times
-"""
-        self.text.setText(report)
+st.write(f"""
+- **Phone Usage Time:** {stats['phone_time']:.2f} sec  
+- **Drowsiness Time:** {stats['drowsy_time']:.2f} sec  
+- **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"}  
+- **Session Duration:** {duration:.2f} sec  
+""")
 
 # ----------------------------
-# MAIN APP
+# FOOTER
 # ----------------------------
-from PyQt5.QtCore import Qt
-
-class DriverMonitoringApp(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Driver Monitoring System")
-        self.setGeometry(100, 100, 900, 700)
-        self.setStyleSheet("background-color: #0d1117;")
-
-        self.layout = QStackedLayout()
-        self.setLayout(self.layout)
-
-        self.page1 = AttendancePage(self.layout)
-        self.page2 = MonitoringPage(self.layout)
-        self.page3 = StatsPage()
-
-        self.layout.addWidget(self.page1)
-        self.layout.addWidget(self.page2)
-        self.layout.addWidget(self.page3)
-
-# ----------------------------
-# RUN
-# ----------------------------
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = DriverMonitoringApp()
-    window.show()
-    sys.exit(app.exec_())
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; padding: 1.5rem 0 1rem 0;">
+    <img src="app/static/logo.png" width="55" style="margin-bottom: 0.6rem; opacity: 0.85;" />
+    <p style="font-size: 0.85rem; color: #888; margin: 0.2rem 0;">
+        Driver Monitoring System &nbsp;|&nbsp; AI-powered Safety Dashboard
+    </p>
+    <p style="font-size: 0.8rem; color: #aaa; margin: 0.4rem 0 0 0;">
+        Built by &nbsp;
+        <strong>Fatima Faisal</strong> &nbsp;·&nbsp;
+        <strong>Minal Haque</strong> &nbsp;·&nbsp;
+        <strong>Pooja Gurnani</strong>
+    </p>
+</div>
+""", unsafe_allow_html=True)
