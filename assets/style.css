@@ -9,61 +9,66 @@ html, body, [class*="css"] {
 
 /* ── Header ── */
 .dms-header {
-    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    background: linear-gradient(135deg, #161b22, #0d1117);
     border-bottom: 2px solid #f97316;
-    padding: 1.2rem 2rem;
+    padding: 1.5rem 2rem;
     margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
+    border-radius: 10px;
 }
+
 .dms-title {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 1.8rem;
+    font-size: 2rem;
     color: #f97316;
     margin: 0;
 }
+
 .dms-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #8b949e;
 }
 
 /* ── Metric Cards ── */
-.card-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
 .metric-card {
-    background: #161b22;
+    background: linear-gradient(145deg, #161b22, #1c2128);
     border: 1px solid #30363d;
-    border-radius: 10px;
-    padding: 1.2rem;
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    transition: 0.2s ease;
 }
-.metric-card.phone::before { background: #f97316; }
-.metric-card.drowsy::before { background: #ef4444; }
-.metric-card.attend::before { background: #22c55e; }
+
+.metric-card:hover {
+    transform: translateY(-4px);
+    border-color: #f97316;
+}
 
 .card-title {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: #8b949e;
+    text-transform: uppercase;
 }
+
 .card-value {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 2rem;
+    font-size: 2.2rem;
+    margin-top: 5px;
 }
-.card-sub {
-    font-size: 0.8rem;
-    color: #8b949e;
-}
+
+.phone { border-left: 4px solid #f97316; }
+.drowsy { border-left: 4px solid #ef4444; }
+.attend { border-left: 4px solid #22c55e; }
 
 /* ── Video panel ── */
 .video-panel {
     background: #161b22;
     border: 1px solid #30363d;
-    border-radius: 10px;
+    border-radius: 14px;
     padding: 1rem;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
 
 /* ── Sidebar ── */
@@ -71,13 +76,142 @@ section[data-testid="stSidebar"] {
     background: #161b22 !important;
 }
 
-/* Buttons */
-.stButton>button {
-    background: #21262d;
-    color: white;
-    border-radius: 6px;
+/* ── About Us Tab ────────────────────────────────────────────────── */
+
+.about-wrapper {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 0;
 }
+
+.about-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.about-subtitle {
+    color: #888;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+.about-card {
+    background: #1a1a1a;
+    border-left: 4px solid #ff6600;
+    border-radius: 10px;
+    padding: 1.4rem 1.8rem;
+    margin-bottom: 2rem;
+}
+
+.about-card h3 {
+    color: #ff6600;
+    margin-top: 0;
+}
+
+.about-card p,
+.about-card li {
+    color: #ccc;
+    line-height: 1.7;
+}
+
+.about-card ul {
+    line-height: 2;
+}
+
+.about-card strong {
+    color: #fff;
+}
+
+.about-card em {
+    color: #ccc;
+}
+
+.team-grid {
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+
+.team-card {
+    flex: 1;
+    min-width: 220px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 1.4rem;
+    border-top: 3px solid #ff6600;
+}
+
+.team-card .team-emoji {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.team-card h4 {
+    margin: 0 0 0.3rem 0;
+    color: #fff;
+}
+
+.team-card .team-role {
+    color: #ff6600;
+    font-size: 0.85rem;
+    margin: 0 0 0.8rem 0;
+}
+
+.team-card p {
+    color: #aaa;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.about-disclaimer {
+    background: #1a1a1a;
+    border-radius: 10px;
+    padding: 1.4rem 1.8rem;
+    text-align: center;
+    border: 1px solid #333;
+}
+
+.about-disclaimer p {
+    color: #888;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.about-disclaimer span {
+    color: #555;
+}
+
+/* ── Buttons ── */
+.stButton>button {
+    background: linear-gradient(135deg, #21262d, #30363d);
+    color: white;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    border: 1px solid #30363d;
+    transition: 0.2s ease;
+}
+
 .stButton>button:hover {
     border-color: #f97316;
     color: #f97316;
+    transform: scale(1.03);
+}
+
+/*footer*/
+.footer {
+    text-align: center;
+    padding: 1.5rem 0 1rem 0;
+}
+
+.footer p {
+    font-size: 0.85rem;
+    color: #888;
+    margin: 0.2rem 0;
+}
+
+.footer strong {
+    color: #ccc;
 }
