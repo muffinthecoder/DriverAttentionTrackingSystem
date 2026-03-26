@@ -126,6 +126,19 @@ with tab2:
         stats["end_time"] = time.time()
         render_metrics()
 
+    # SESSION REPORT
+    st.markdown("### Session Report")
+    duration = 0.0
+    if stats.get("start_time") and stats.get("end_time"):
+        duration = stats["end_time"] - stats["start_time"]
+
+    st.write(f"""
+    - **Phone Usage Time:** {stats['phone_time']:.2f} sec  
+    - **Drowsiness Time:** {stats['drowsy_time']:.2f} sec  
+    - **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"}  
+    - **Session Duration:** {duration:.2f} sec  
+    """)
+
 
 with tab3:
     st.markdown(
@@ -179,7 +192,7 @@ end of every drive — giving fleet operators a clear, timestamped record of dri
 <p class="team-role">Lead Developer & Systems Integrator</p>
 <p>Responsible for the overall system architecture, Streamlit dashboard,
 WebRTC integration, and connecting the three AI subsystems into a single
-cohesive pipeline. Handled CSS theming and deployment setup.</p>
+cohesive pipeline. Developed the Phone detection model. Handled CSS theming and deployment setup.</p>
 </div>
 <div class="team-card">
 <div class="team-emoji">👩‍🔬</div>
@@ -193,7 +206,7 @@ and real-time identity verification with CSV-based logging.</p>
 <div class="team-emoji">👩‍🎓</div>
 <h4>Minal Haque</h4>
 <p class="team-role">Safety Detection & Alert Systems</p>
-<p>Developed the drowsiness detection and phone usage detection modules,
+<p>Developed the drowsiness detection module,
 combining facial landmark analysis and object detection to provide
 real-time safety alerts and session-level behavioural reporting.</p>
 </div>
@@ -207,18 +220,8 @@ further validation and regulatory approval.</span></p>
 </div>
 
 </div>""", unsafe_allow_html=True)
-# SESSION REPORT
-st.markdown("### Session Report")
-duration = 0.0
-if stats.get("start_time") and stats.get("end_time"):
-    duration = stats["end_time"] - stats["start_time"]
 
-st.write(f"""
-- **Phone Usage Time:** {stats['phone_time']:.2f} sec  
-- **Drowsiness Time:** {stats['drowsy_time']:.2f} sec  
-- **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"}  
-- **Session Duration:** {duration:.2f} sec  
-""")
+
 
 # FOOTER
 st.markdown("---")
