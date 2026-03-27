@@ -154,9 +154,21 @@ def update_registration_count():
             reader = csv.reader(f)
             rows = [r for r in reader if any(field.strip() for field in r)]
         res = max(0, len(rows) - 1)  # subtract header
-    message.configure(text='Total Registrations till now  : ' + str(res))
+    # Only update the tkinter label if running in standalone GUI mode
+    if 'message' in globals() and globals()['message'] is not None:
+        try:
+            globals()['message'].configure(text='Total Registrations till now  : ' + str(res))
+        except Exception:
+            pass
+    return res
 
-def TakeImages():
+
+def TakeImages(Id=None, name=None):
+    if Id is None:
+        Id = txt.get()
+    if name is None:
+        name = txt2.get()
+
     check_haarcascadefile()
     columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
     assure_path_exists("DriverDetails")
@@ -174,9 +186,7 @@ def TakeImages():
         serial = 0
 
     serial = serial + 1
-
-    Id = txt.get()
-    name = txt2.get()
+    standalone = __name__ == "__main__"  # True only when run directly
 
     if (name.isalpha()) or (' ' in name):
         cam = cv2.VideoCapture(0)
@@ -194,20 +204,36 @@ def TakeImages():
                 sampleNum += 1
                 img_path = get_path("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
                 cv2.imwrite(img_path, gray[y:y + h, x:x + w])
-                cv2.imshow('Taking Images', img)
-            if cv2.waitKey(100) & 0xFF == ord('q'):
+                if standalone:
+                    cv2.imshow('Taking Images', img)  # only in standalone GUI
+            if standalone and cv2.waitKey(100) & 0xFF == ord('q'):
                 break
-            elif sampleNum > 100:
+            elif sampleNum > 50:
                 break
         cam.release()
-        cv2.destroyAllWindows()
+        if standalone:
+            cv2.destroyAllWindows()
+
+
         row = [serial, '', Id, '', name]
         with open(csv_path, 'a+', newline='') as csvFile:
             csv.writer(csvFile).writerow(row)
-        message1.configure(text="Images Taken for ID : " + Id)
+        # Only update tkinter label if running standalone
+        if 'message1' in globals() and globals()['message1'] is not None:
+            try:
+                globals()['message1'].configure(text="Images Taken for ID : " + Id)
+            except Exception:
+                pass
         update_registration_count()
+        return True, f"Images captured successfully for ID: {Id}"
     else:
-        message1.configure(text="Enter Correct name")
+        if 'message1' in globals() and globals()['message1'] is not None:
+            try:
+                globals()['message1'].configure(text="Enter Correct name")
+            except Exception:
+                pass
+        return False, "Enter a correct name (letters and spaces only)"
+
 
 def TrainImages():
     check_haarcascadefile()
@@ -220,10 +246,16 @@ def TrainImages():
         recognizer.train(faces, np.array(ID))
     except Exception:
         mess._show(title='No Registrations', message='Please Register someone first!!!')
-        return
+        return False, "No registrations found"
     recognizer.save(get_path("TrainingImageLabel/Trainner.yml"))
-    message1.configure(text="Profile Saved Successfully")
+    # Only update tkinter label if running standalone
+    if 'message1' in globals() and globals()['message1'] is not None:
+        try:
+            globals()['message1'].configure(text="Profile Saved Successfully")
+        except Exception:
+            pass
     update_registration_count()
+    return True, "Profile saved successfully"
 
 def getImagesAndLabels(path):
     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
@@ -337,6 +369,7 @@ def TrackImages():
                 tv.insert('', 0, text=str(lines[0]), values=(str(lines[1]), str(lines[2]), str(lines[3])))
 
     mess._show(title='Attendance Marked', message='Attendance marked successfully!')
+
 # Shared state for when called externally via process_attendance_frame()
 _att_recognizer       = None
 _att_face_cascade     = None
@@ -469,127 +502,127 @@ def process_attendance_frame(frame, alerts_flags=None):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     return frame, status
-#Keys
-global key
-key = ''
 
-ts = time.time()
-date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
-day, month, year = date.split("-")
 
-mont = {'01': 'January', '02': 'February', '03': 'March', '04': 'April',
-        '05': 'May', '06': 'June', '07': 'July', '08': 'August',
-        '09': 'September', '10': 'October', '11': 'November', '12': 'December'}
+# ── Standalone GUI (only runs when executed directly) ──────────────────────────
+if __name__ == "__main__":
+    key = ''
 
-# GUI front end - only kept for individual unit test
-window = tk.Tk()
-window.title("Driver Attendance System")
-window.geometry("1200x700")
-window.configure(bg="#f5f7fa")
+    ts = time.time()
+    date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+    day, month, year = date.split("-")
 
-style = ttk.Style()
-style.theme_use('clam')
+    mont = {'01': 'January', '02': 'February', '03': 'March', '04': 'April',
+            '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+            '09': 'September', '10': 'October', '11': 'November', '12': 'December'}
 
-# Style configs
-style.configure("TFrame", background="#f5f7fa")
-style.configure("TLabel", background="#f5f7fa", font=("Segoe UI", 11))
-style.configure("Header.TLabel", font=("Segoe UI", 20, "bold"))
-style.configure("SubHeader.TLabel", font=("Segoe UI", 14, "bold"))
-style.configure("TButton", font=("Segoe UI", 11), padding=6)
+    # GUI front end - only kept for individual unit test
+    window = tk.Tk()
+    window.title("Driver Attendance System")
+    window.geometry("1200x700")
+    window.configure(bg="#f5f7fa")
 
-# Header
+    style = ttk.Style()
+    style.theme_use('clam')
 
-header = ttk.Label(window, text="Driver Attendance System", style="Header.TLabel")
-header.pack(pady=15)
+    # Style configs
+    style.configure("TFrame", background="#f5f7fa")
+    style.configure("TLabel", background="#f5f7fa", font=("Segoe UI", 11))
+    style.configure("Header.TLabel", font=("Segoe UI", 20, "bold"))
+    style.configure("SubHeader.TLabel", font=("Segoe UI", 14, "bold"))
+    style.configure("TButton", font=("Segoe UI", 11), padding=6)
 
-top_frame = ttk.Frame(window)
-top_frame.pack(fill="x", padx=20)
+    # Header
+    header = ttk.Label(window, text="Driver Attendance System", style="Header.TLabel")
+    header.pack(pady=15)
 
-datef = ttk.Label(top_frame, text=f"{day}-{mont[month]}-{year}", font=("Segoe UI", 12))
-datef.pack(side="left")
+    top_frame = ttk.Frame(window)
+    top_frame.pack(fill="x", padx=20)
 
-clock = ttk.Label(top_frame, font=("Segoe UI", 12))
-clock.pack(side="right")
-tick()
+    datef = ttk.Label(top_frame, text=f"{day}-{mont[month]}-{year}", font=("Segoe UI", 12))
+    datef.pack(side="left")
 
-# Main container
-container = ttk.Frame(window)
-container.pack(fill="both", expand=True, padx=20, pady=20)
+    clock = ttk.Label(top_frame, font=("Segoe UI", 12))
+    clock.pack(side="right")
+    tick()
 
-left_frame = ttk.Frame(container)
-left_frame.pack(side="left", fill="both", expand=True, padx=10)
+    # Main container
+    container = ttk.Frame(window)
+    container.pack(fill="both", expand=True, padx=20, pady=20)
 
-right_frame = ttk.Frame(container)
-right_frame.pack(side="right", fill="both", expand=True, padx=10)
+    left_frame = ttk.Frame(container)
+    left_frame.pack(side="left", fill="both", expand=True, padx=10)
 
-# Attendance window
-ttk.Label(left_frame, text="Attendance", style="SubHeader.TLabel").pack(pady=10)
+    right_frame = ttk.Frame(container)
+    right_frame.pack(side="right", fill="both", expand=True, padx=10)
 
-trackImg = ttk.Button(left_frame, text="Take Attendance", command=TrackImages)
-trackImg.pack(pady=10, fill="x")
+    # Attendance window
+    ttk.Label(left_frame, text="Attendance", style="SubHeader.TLabel").pack(pady=10)
 
-tv = ttk.Treeview(left_frame, columns=('name', 'date', 'time'))
-tv.heading('#0', text='ID')
-tv.heading('name', text='Name')
-tv.heading('date', text='Date')
-tv.heading('time', text='Time')
+    trackImg = ttk.Button(left_frame, text="Take Attendance", command=TrackImages)
+    trackImg.pack(pady=10, fill="x")
 
-tv.column('#0', width=80)
-tv.column('name', width=120)
-tv.column('date', width=120)
-tv.column('time', width=120)
+    tv = ttk.Treeview(left_frame, columns=('name', 'date', 'time'))
+    tv.heading('#0', text='ID')
+    tv.heading('name', text='Name')
+    tv.heading('date', text='Date')
+    tv.heading('time', text='Time')
 
-tv.pack(fill="both", expand=True, pady=10)
+    tv.column('#0', width=80)
+    tv.column('name', width=120)
+    tv.column('date', width=120)
+    tv.column('time', width=120)
 
-scroll = ttk.Scrollbar(left_frame, orient="vertical", command=tv.yview)
-tv.configure(yscrollcommand=scroll.set)
-scroll.pack(side="right", fill="y")
+    tv.pack(fill="both", expand=True, pady=10)
 
-quitWindow = ttk.Button(left_frame, text="Quit", command=window.destroy)
-quitWindow.pack(pady=10, fill="x")
+    scroll = ttk.Scrollbar(left_frame, orient="vertical", command=tv.yview)
+    tv.configure(yscrollcommand=scroll.set)
+    scroll.pack(side="right", fill="y")
 
-# Registration menu
+    quitWindow = ttk.Button(left_frame, text="Quit", command=window.destroy)
+    quitWindow.pack(pady=10, fill="x")
 
-ttk.Label(right_frame, text="New Registration", style="SubHeader.TLabel").pack(pady=10)
+    # Registration menu
+    ttk.Label(right_frame, text="New Registration", style="SubHeader.TLabel").pack(pady=10)
 
-ttk.Label(right_frame, text="Driver ID").pack(anchor="w", padx=5)
-txt = ttk.Entry(right_frame)
-txt.pack(fill="x", padx=5, pady=5)
+    ttk.Label(right_frame, text="Driver ID").pack(anchor="w", padx=5)
+    txt = ttk.Entry(right_frame)
+    txt.pack(fill="x", padx=5, pady=5)
 
-ttk.Label(right_frame, text="Driver Name").pack(anchor="w", padx=5)
-txt2 = ttk.Entry(right_frame)
-txt2.pack(fill="x", padx=5, pady=5)
+    ttk.Label(right_frame, text="Driver Name").pack(anchor="w", padx=5)
+    txt2 = ttk.Entry(right_frame)
+    txt2.pack(fill="x", padx=5, pady=5)
 
-clearButton = ttk.Button(right_frame, text="Clear ID", command=clear)
-clearButton.pack(pady=5, fill="x")
+    clearButton = ttk.Button(right_frame, text="Clear ID", command=clear)
+    clearButton.pack(pady=5, fill="x")
 
-clearButton2 = ttk.Button(right_frame, text="Clear Name", command=clear2)
-clearButton2.pack(pady=5, fill="x")
+    clearButton2 = ttk.Button(right_frame, text="Clear Name", command=clear2)
+    clearButton2.pack(pady=5, fill="x")
 
-takeImg = ttk.Button(right_frame, text="Take Images", command=TakeImages)
-takeImg.pack(pady=10, fill="x")
+    takeImg = ttk.Button(right_frame, text="Take Images", command=TakeImages)
+    takeImg.pack(pady=10, fill="x")
 
-trainImg = ttk.Button(right_frame, text="Save Profile", command=psw)
-trainImg.pack(pady=5, fill="x")
+    trainImg = ttk.Button(right_frame, text="Save Profile", command=psw)
+    trainImg.pack(pady=5, fill="x")
 
-message1 = ttk.Label(right_frame, text="1) Take Images  →  2) Save Profile")
-message1.pack(pady=10)
+    message1 = ttk.Label(right_frame, text="1) Take Images  →  2) Save Profile")
+    message1.pack(pady=10)
 
-message = ttk.Label(right_frame, text="")
-message.pack(pady=5)
+    message = ttk.Label(right_frame, text="")
+    message.pack(pady=5)
 
-# Menu
-menubar = tk.Menu(window)
-filemenu = tk.Menu(menubar, tearoff=0)
-filemenu.add_command(label='Change Password', command=change_pass)
-filemenu.add_command(label='Contact Us', command=contact)
-filemenu.add_separator()
-filemenu.add_command(label='Exit', command=window.destroy)
+    # Menu
+    menubar = tk.Menu(window)
+    filemenu = tk.Menu(menubar, tearoff=0)
+    filemenu.add_command(label='Change Password', command=change_pass)
+    filemenu.add_command(label='Contact Us', command=contact)
+    filemenu.add_separator()
+    filemenu.add_command(label='Exit', command=window.destroy)
 
-menubar.add_cascade(label='Help', menu=filemenu)
-window.config(menu=menubar)
+    menubar.add_cascade(label='Help', menu=filemenu)
+    window.config(menu=menubar)
 
-# Running the GUI
-update_registration_count()
+    # Running the GUI
+    update_registration_count()
 
-window.mainloop()
+    window.mainloop()
