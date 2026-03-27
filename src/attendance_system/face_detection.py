@@ -17,7 +17,6 @@ import pandas as pd
 import datetime
 import time
 import sys
-import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import stats, announce_violation
@@ -338,7 +337,138 @@ def TrackImages():
                 tv.insert('', 0, text=str(lines[0]), values=(str(lines[1]), str(lines[2]), str(lines[3])))
 
     mess._show(title='Attendance Marked', message='Attendance marked successfully!')
+# Shared state for when called externally via process_attendance_frame()
+_att_recognizer       = None
+_att_face_cascade     = None
+_att_driver_df        = None
+_att_last_recognition = None   # (ID, name, timestamp) of last recognized face
+_att_col_names        = ['Id', 'Name', 'Date', 'Time']
 
+def _att_load_models():
+    """Lazy-load the recognizer and cascade once, on first call."""
+    global _att_recognizer, _att_face_cascade, _att_driver_df
+
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    if not os.path.isfile(harcascadePath):
+        return False, "Haar cascade file missing"
+
+    trainner_path = get_path("TrainingImageLabel/Trainner.yml")
+    if not os.path.isfile(trainner_path):
+        return False, "No trained model found - please Save Profile first"
+
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+    if not os.path.isfile(csv_path):
+        return False, "Driver details CSV missing"
+
+    _att_face_cascade = cv2.CascadeClassifier(harcascadePath)
+
+    _att_recognizer = cv2.face.LBPHFaceRecognizer_create()
+    _att_recognizer.read(trainner_path)
+
+    df = pd.read_csv(csv_path)
+    df.columns = df.columns.str.strip()
+    df = df.dropna(axis=1, how='all')
+    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
+    df['SERIAL NO.'] = pd.to_numeric(df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
+    _att_driver_df = df
+
+    return True, "OK"
+
+
+def process_attendance_frame(frame, alerts_flags=None):
+    """
+    Process a single frame for attendance/face recognition.
+    Intended to be called from main.py each frame.
+
+    Args:
+        frame:        BGR frame from OpenCV capture.
+        alerts_flags: Optional dict (unused here but kept consistent with
+                      the other process_*_frame signatures).
+
+    Returns:
+        annotated_frame: Frame with recognition overlay drawn on it.
+        status: dict with keys:
+            - 'face_found'    (bool)
+            - 'recognized'    (bool)
+            - 'driver_id'     (str or None)
+            - 'driver_name'   (str or None)
+            - 'confidence'    (float or None)
+            - 'attendance_marked' (bool)  True only on the frame it was written
+    """
+    global _att_recognizer, _att_face_cascade, _att_driver_df, _att_last_recognition
+
+    status = {
+        "face_found":        False,
+        "recognized":        False,
+        "driver_id":         None,
+        "driver_name":       None,
+        "confidence":        None,
+        "attendance_marked": False,
+    }
+
+    # Lazy-load models on first call
+    if _att_recognizer is None:
+        ok, msg = _att_load_models()
+        if not ok:
+            # Draw error message on frame and return early
+            cv2.putText(frame, f"Attendance: {msg}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 200), 2)
+            return frame, status
+
+    gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = _att_face_cascade.detectMultiScale(gray, 1.2, 5)
+
+    for (x, y, w, h) in faces:
+        status["face_found"] = True
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (225, 0, 0), 2)
+
+        serial, conf = _att_recognizer.predict(gray[y:y + h, x:x + w])
+        status["confidence"] = conf
+
+        if conf < 50:
+            # Look up driver details
+            row = _att_driver_df[_att_driver_df['SERIAL NO.'] == int(serial)]
+            if len(row) > 0:
+                driver_name = str(row['NAME'].values[0]).strip()
+                driver_id   = str(row['ID'].values[0]).strip()
+            else:
+                driver_name, driver_id = 'Unknown', 'Unknown'
+
+            status["recognized"]  = True
+            status["driver_id"]   = driver_id
+            status["driver_name"] = driver_name
+
+            cv2.putText(frame, f"{driver_name} (ID:{driver_id})",
+                        (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7, (0, 255, 0), 2)
+
+            # Write attendance only once per recognition (avoid duplicate rows)
+            ts        = time.time()
+            date_str  = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+            time_str  = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+            record    = (driver_id, driver_name)
+
+            if _att_last_recognition != record:
+                _att_last_recognition = record
+                assure_path_exists("Attendance")
+                att_file = get_path(f"Attendance/Attendance_{date_str}.csv")
+                exists   = os.path.isfile(att_file)
+                row_data = [driver_id, driver_name, date_str, time_str]
+
+                with open(att_file, 'a+', newline='') as f:
+                    w_csv = csv.writer(f)
+                    if not exists:
+                        w_csv.writerow(_att_col_names)
+                    w_csv.writerow(row_data)
+
+                status["attendance_marked"] = True
+                print(f"Attendance marked: {driver_name} ({driver_id}) at {time_str}")
+
+        else:
+            cv2.putText(frame, 'Unknown', (x, y + h + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+    return frame, status
 #Keys
 global key
 key = ''
