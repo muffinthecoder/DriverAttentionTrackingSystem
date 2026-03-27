@@ -1,11 +1,15 @@
 # This file contains the main code for the Attendance sub-system of DATS+
 # This code also contains an individual GUI in order to test just this unit alone later.
+# Type "python src/attendance_system/face_detection.py" on the terminal to run it individually
 # Code provided by: Pooja Gurnani
 # Additional credits: Code dependancies and GUI fixes by Fatima Faisal
 
-# ── Imports ───────────────────────────────────────────────────────────────────
-import cv2
-import os
+#Imports
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox as mess
+import tkinter.simpledialog as tsd
+import cv2, os
 import csv
 import numpy as np
 from PIL import Image
@@ -14,331 +18,660 @@ import datetime
 import time
 import sys
 
-# Add parent folder (src/) to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils import stats, announce_violation
 
-# ── Base directory (relative to this file) ───────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# This makes sure all files are always found relative to where main.py is saved
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_path(relative_path):
     return os.path.join(BASE_DIR, relative_path)
 
-
+#Functions
 def assure_path_exists(relative_path):
-    full = get_path(relative_path)
-    if not os.path.exists(full):
-        os.makedirs(full)
+    full_path = get_path(relative_path)
+    if not os.path.exists(full_path):
+        os.makedirs(full_path)
 
+def tick():
+    time_string = time.strftime('%H:%M:%S')
+    clock.config(text=time_string)
+    clock.after(200, tick)
 
-# ── Face-image helpers ────────────────────────────────────────────────────────
-def getImagesAndLabels(path):
-    """Return (faces, ids) from training-image folder."""
-    image_paths = [os.path.join(path, f) for f in os.listdir(path)
-                   if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    faces, ids = [], []
-    for img_path in image_paths:
-        pil_img = Image.open(img_path).convert('L')
-        img_np = np.array(pil_img, 'uint8')
-        # filename: name.serial.id.sample.jpg  → serial is index [1]
-        try:
-            label = int(os.path.basename(img_path).split(".")[1])
-        except (IndexError, ValueError):
-            continue
-        faces.append(img_np)
-        ids.append(label)
-    return faces, ids
+def contact():
+    mess._show(title='Contact us', message="Please contact us on : 'xxxxxxxxxxxxx@gmail.com' ")
 
+def check_haarcascadefile():
+    exists = os.path.isfile(get_path("haarcascade_frontalface_default.xml"))
+    if not exists:
+        mess._show(title='Some file missing', message='Please contact us for help')
+        window.destroy()
 
-# ── Public API (called from main.py) ─────────────────────────────────────────
+def save_pass():
+    assure_path_exists("TrainingImageLabel")
+    exists1 = os.path.isfile(get_path("TrainingImageLabel/psd.txt"))
+    if exists1:
+        tf = open(get_path("TrainingImageLabel/psd.txt"), "r")
+        key = tf.read()
+        tf.close()
+    else:
+        master.destroy()
+        new_pas = tsd.askstring('Old Password not found', 'Please enter a new password below', show='*')
+        if new_pas is None:
+            mess._show(title='No Password Entered', message='Password not set!! Please try again')
+        else:
+            tf = open(get_path("TrainingImageLabel/psd.txt"), "w")
+            tf.write(new_pas)
+            tf.close()
+            mess._show(title='Password Registered', message='New password was registered successfully!!')
+            return
+    op = old.get()
+    newp = new.get()
+    nnewp = nnew.get()
+    if op == key:
+        if newp == nnewp:
+            txf = open(get_path("TrainingImageLabel/psd.txt"), "w")
+            txf.write(newp)
+            txf.close()
+        else:
+            mess._show(title='Error', message='Confirm new password again!!!')
+            return
+    else:
+        mess._show(title='Wrong Password', message='Please enter correct old password.')
+        return
+    mess._show(title='Password Changed', message='Password changed successfully!!')
+    master.destroy()
 
-def TakeImages(user_id, user_name):
-    """
-    Capture 100 face images for *user_id* / *user_name* and save to
-    TrainingImage/.  Returns a status string.
-    """
-    haarcascade = get_path("haarcascade_frontalface_default.xml")
-    if not os.path.isfile(haarcascade):
-        return "ERROR: haarcascade_frontalface_default.xml not found"
+def TakeImages_streamlit(Id, name, processor):
+    check_haarcascadefile()
 
-    if not (user_name.replace(" ", "").isalpha()):
-        return "ERROR: Name must contain letters only"
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    detector = cv2.CascadeClassifier(harcascadePath)
 
-    assure_path_exists("DriverDetails")
+    sampleNum = 0
+
     assure_path_exists("TrainingImage")
+    assure_path_exists("DriverDetails")
 
-    columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
     csv_path = get_path("DriverDetails/DriverDetails.csv")
 
     if os.path.isfile(csv_path):
-        with open(csv_path, 'r', newline='') as f:
-            rows = [r for r in csv.reader(f) if any(field.strip() for field in r)]
-        serial = max(0, len(rows) - 1)
+        with open(csv_path, 'r') as f:
+            serial = len(list(csv.reader(f)))
     else:
-        with open(csv_path, 'a+', newline='') as f:
-            csv.writer(f).writerow(columns)
-        serial = 0
+        serial = 1
 
-    serial += 1
+    start_time = time.time()
 
-    detector = cv2.CascadeClassifier(haarcascade)
-    cam = cv2.VideoCapture(0)
-    sample_num = 0
+    while sampleNum < 50:
+        frame = processor.frame
 
-    while sample_num < 100:
-        ret, img = cam.read()
-        if not ret:
-            break
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        if frame is None:
+            continue
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = detector.detectMultiScale(gray, 1.3, 5)
-        for (x, y, w, h) in faces:
-            sample_num += 1
-            img_path = get_path(
-                f"TrainingImage/{user_name}.{serial}.{user_id}.{sample_num}.jpg"
-            )
-            cv2.imwrite(img_path, gray[y:y + h, x:x + w])
-            if sample_num >= 100:
-                break
 
-    cam.release()
+        for (x, y, w, h) in faces:
+            sampleNum += 1
+
+            img_path = get_path(
+                f"TrainingImage/{name}.{serial}.{Id}.{sampleNum}.jpg"
+            )
+
+            cv2.imwrite(img_path, gray[y:y + h, x:x + w])
+
+        if time.time() - start_time > 10:
+            break
+
+    row = [serial, '', Id, '', name]
 
     with open(csv_path, 'a+', newline='') as f:
-        csv.writer(f).writerow([serial, '', user_id, '', user_name])
+        csv.writer(f).writerow(row)
 
-    return f"Captured {sample_num} images for {user_name} (ID: {user_id})"
+    return True, f"{sampleNum} images captured"
+
+def change_pass():
+    global master
+    master = tk.Tk()
+    master.geometry("400x160")
+    master.resizable(False, False)
+    master.title("Change Password")
+    master.configure(background="white")
+    lbl4 = tk.Label(master, text='    Enter Old Password', bg='white', font=('times', 12, ' bold '))
+    lbl4.place(x=10, y=10)
+    global old
+    old = tk.Entry(master, width=25, fg="black", relief='solid', font=('times', 12, ' bold '), show='*')
+    old.place(x=180, y=10)
+    lbl5 = tk.Label(master, text='   Enter New Password', bg='white', font=('times', 12, ' bold '))
+    lbl5.place(x=10, y=45)
+    global new
+    new = tk.Entry(master, width=25, fg="black", relief='solid', font=('times', 12, ' bold '), show='*')
+    new.place(x=180, y=45)
+    lbl6 = tk.Label(master, text='Confirm New Password', bg='white', font=('times', 12, ' bold '))
+    lbl6.place(x=10, y=80)
+    global nnew
+    nnew = tk.Entry(master, width=25, fg="black", relief='solid', font=('times', 12, ' bold '), show='*')
+    nnew.place(x=180, y=80)
+    cancel = tk.Button(master, text="Cancel", command=master.destroy, fg="black", bg="red", height=1, width=25,
+                       activebackground="white", font=('times', 10, ' bold '))
+    cancel.place(x=200, y=120)
+    save1 = tk.Button(master, text="Save", command=save_pass, fg="black", bg="#3ece48", height=1, width=25,
+                      activebackground="white", font=('times', 10, ' bold '))
+    save1.place(x=10, y=120)
+    master.mainloop()
+
+def psw():
+    assure_path_exists("TrainingImageLabel")
+    exists1 = os.path.isfile(get_path("TrainingImageLabel/psd.txt"))
+    if exists1:
+        tf = open(get_path("TrainingImageLabel/psd.txt"), "r")
+        key = tf.read()
+        tf.close()
+    else:
+        new_pas = tsd.askstring('Old Password not found', 'Please enter a new password below', show='*')
+        if new_pas is None:
+            mess._show(title='No Password Entered', message='Password not set!! Please try again')
+        else:
+            tf = open(get_path("TrainingImageLabel/psd.txt"), "w")
+            tf.write(new_pas)
+            tf.close()
+            mess._show(title='Password Registered', message='New password was registered successfully!!')
+            return
+    password = tsd.askstring('Password', 'Enter Password', show='*')
+    if password == key:
+        TrainImages()
+    elif password is None:
+        pass
+    else:
+        mess._show(title='Wrong Password', message='You have entered wrong password')
+
+def clear():
+    txt.delete(0, 'end')
+    message1.configure(text="1)Take Images  >>>  2)Save Profile")
+
+def clear2():
+    txt2.delete(0, 'end')
+    message1.configure(text="1)Take Images  >>>  2)Save Profile")
+
+def update_registration_count():
+    res = 0
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+    if os.path.isfile(csv_path):
+        with open(csv_path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            rows = [r for r in reader if any(field.strip() for field in r)]
+        res = max(0, len(rows) - 1)  # subtract header
+    # Only update the tkinter label if running in standalone GUI mode
+    if 'message' in globals() and globals()['message'] is not None:
+        try:
+            globals()['message'].configure(text='Total Registrations till now  : ' + str(res))
+        except Exception:
+            pass
+    return res
+
+
+def TakeImages(Id=None, name=None):
+    if Id is None:
+        Id = txt.get()
+    if name is None:
+        name = txt2.get()
+
+    check_haarcascadefile()
+    columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
+    assure_path_exists("DriverDetails")
+    assure_path_exists("TrainingImage")
+    serial = 0
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+    if os.path.isfile(csv_path):
+        with open(csv_path, 'r', newline='') as csvFile1:
+            reader1 = csv.reader(csvFile1)
+            rows = [r for r in reader1 if any(field.strip() for field in r)]
+        serial = max(0, len(rows) - 1)
+    else:
+        with open(csv_path, 'a+', newline='') as csvFile1:
+            csv.writer(csvFile1).writerow(columns)
+        serial = 0
+
+    serial = serial + 1
+    standalone = __name__ == "__main__"  # True only when run directly
+
+    if (name.isalpha()) or (' ' in name):
+        cam = cv2.VideoCapture(0)
+        harcascadePath = get_path("haarcascade_frontalface_default.xml")
+        detector = cv2.CascadeClassifier(harcascadePath)
+        sampleNum = 0
+        while True:
+            ret, img = cam.read()
+            if not ret:
+                break
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = detector.detectMultiScale(gray, 1.3, 5)
+            for (x, y, w, h) in faces:
+                cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                sampleNum += 1
+                img_path = get_path("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+                cv2.imwrite(img_path, gray[y:y + h, x:x + w])
+                if standalone:
+                    cv2.imshow('Taking Images', img)  # only in standalone GUI
+            if standalone and cv2.waitKey(100) & 0xFF == ord('q'):
+                break
+            elif sampleNum > 50:
+                break
+        cam.release()
+        if standalone:
+            cv2.destroyAllWindows()
+
+
+        row = [serial, '', Id, '', name]
+        with open(csv_path, 'a+', newline='') as csvFile:
+            csv.writer(csvFile).writerow(row)
+        # Only update tkinter label if running standalone
+        if 'message1' in globals() and globals()['message1'] is not None:
+            try:
+                globals()['message1'].configure(text="Images Taken for ID : " + Id)
+            except Exception:
+                pass
+        update_registration_count()
+        return True, f"Images captured successfully for ID: {Id}"
+    else:
+        if 'message1' in globals() and globals()['message1'] is not None:
+            try:
+                globals()['message1'].configure(text="Enter Correct name")
+            except Exception:
+                pass
+        return False, "Enter a correct name (letters and spaces only)"
 
 
 def TrainImages():
-    """
-    Train LBPH recognizer on saved images.
-    Returns a status string.
-    """
-    haarcascade = get_path("haarcascade_frontalface_default.xml")
-    if not os.path.isfile(haarcascade):
-        return "ERROR: haarcascade_frontalface_default.xml not found"
-
+    check_haarcascadefile()
     assure_path_exists("TrainingImageLabel")
     recognizer = cv2.face.LBPHFaceRecognizer_create()
-    faces, ids = getImagesAndLabels(get_path("TrainingImage"))
-
-    if not faces:
-        return "ERROR: No training images found. Please register a driver first."
-
-    recognizer.train(faces, np.array(ids))
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    detector = cv2.CascadeClassifier(harcascadePath)
+    faces, ID = getImagesAndLabels(get_path("TrainingImage"))
+    try:
+        recognizer.train(faces, np.array(ID))
+    except Exception:
+        mess._show(title='No Registrations', message='Please Register someone first!!!')
+        return False, "No registrations found"
     recognizer.save(get_path("TrainingImageLabel/Trainner.yml"))
-    return f"Model trained on {len(faces)} images."
+    # Only update tkinter label if running standalone
+    if 'message1' in globals() and globals()['message1'] is not None:
+        try:
+            globals()['message1'].configure(text="Profile Saved Successfully")
+        except Exception:
+            pass
+    update_registration_count()
+    return True, "Profile saved successfully"
 
+def getImagesAndLabels(path):
+    imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
+    faces = []
+    Ids = []
+    for imagePath in imagePaths:
+        pilImage = Image.open(imagePath).convert('L')
+        imageNp = np.array(pilImage, 'uint8')
+        # filename format: name.serial.id.samplenum.jpg
+        ID = int(os.path.split(imagePath)[-1].split(".")[1])
+        faces.append(imageNp)
+        Ids.append(ID)
+    return faces, Ids
 
-# ── Per-frame state ───────────────────────────────────────────────────────────
-_recognizer = None
-_face_cascade = None
-_attendance_marked = set()  # IDs already logged this session
+def TrackImages():
+    check_haarcascadefile()
+    assure_path_exists("Attendance")
+    assure_path_exists("DriverDetails")
+    for k in tv.get_children():
+        tv.delete(k)
+    i = 0
+    attendance = []
 
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    trainner_path = get_path("TrainingImageLabel/Trainner.yml")
+    if os.path.isfile(trainner_path):
+        recognizer.read(trainner_path)
+    else:
+        mess._show(title='Data Missing', message='Please click on Save Profile to reset data!!')
+        return
 
-def _load_models():
-    global _recognizer, _face_cascade
-    if _face_cascade is None:
-        haarcascade = get_path("haarcascade_frontalface_default.xml")
-        _face_cascade = cv2.CascadeClassifier(haarcascade)
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    faceCascade = cv2.CascadeClassifier(harcascadePath)
+    cam = cv2.VideoCapture(0)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    col_names = ['Id', 'Name', 'Date', 'Time']
 
-    if _recognizer is None:
-        trainner = get_path("TrainingImageLabel/Trainner.yml")
-        if os.path.isfile(trainner):
-            _recognizer = cv2.face.LBPHFaceRecognizer_create()
-            _recognizer.read(trainner)
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+    if os.path.isfile(csv_path):
+        df = pd.read_csv(csv_path)
+        # FIX: strip column names and drop empty columns
+        df.columns = df.columns.str.strip()
+        df = df.dropna(axis=1, how='all')
+        df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
+        # FIX: make SERIAL NO. int for comparison
+        df['SERIAL NO.'] = pd.to_numeric(df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
+    else:
+        mess._show(title='Details Missing', message='Students details are missing, please check!')
+        cam.release()
+        cv2.destroyAllWindows()
+        return
+
+    while True:
+        ret, im = cam.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(im, (x, y), (x + w, y + h), (225, 0, 0), 2)
+            serial, conf = recognizer.predict(gray[y:y + h, x:x + w])
+            if conf < 50:
+                ts = time.time()
+                date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+                timeStamp = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+                # FIX: proper int comparison for serial number
+                row = df[df['SERIAL NO.'] == int(serial)]
+                if len(row) > 0:
+                    bb = str(row['NAME'].values[0]).strip()
+                    ID = str(row['ID'].values[0]).strip()
+                else:
+                    bb = 'Unknown'
+                    ID = 'Unknown'
+                attendance = [ID, bb, date, timeStamp]
+                cv2.putText(im, bb, (x, y + h), font, 1, (0, 255, 0), 2)
+            else:
+                cv2.putText(im, 'Unknown', (x, y + h), font, 1, (0, 0, 255), 2)
+        cv2.imshow('Taking Attendance', im)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        # FIX: also close when camera window X is clicked
+        if cv2.getWindowProperty('Taking Attendance', cv2.WND_PROP_VISIBLE) < 1:
+            break
+
+    cam.release()
+    cv2.destroyAllWindows()
+
+    if not attendance:
+        mess._show(title='No Attendance', message='No face recognized. Please try again.')
+        return
+
+    ts = time.time()
+    date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+    att_file = get_path("Attendance/Attendance_" + date + ".csv")
+    exists = os.path.isfile(att_file)
+
+    if exists:
+        with open(att_file, 'a+', newline='') as csvFile1:
+            csv.writer(csvFile1).writerow(attendance)
+    else:
+        with open(att_file, 'a+', newline='') as csvFile1:
+            w = csv.writer(csvFile1)
+            w.writerow(col_names)
+            w.writerow(attendance)
+
+    with open(att_file, 'r', newline='') as csvFile1:
+        reader1 = csv.reader(csvFile1)
+        next(reader1)  # skip header
+        for lines in reader1:
+            if len(lines) >= 4:
+                tv.insert('', 0, text=str(lines[0]), values=(str(lines[1]), str(lines[2]), str(lines[3])))
+
+    mess._show(title='Attendance Marked', message='Attendance marked successfully!')
+
+# Shared state for when called externally via process_attendance_frame()
+_att_recognizer       = None
+_att_face_cascade     = None
+_att_driver_df        = None
+_att_last_recognition = None   # (ID, name, timestamp) of last recognized face
+_att_col_names        = ['Id', 'Name', 'Date', 'Time']
+
+def _att_load_models():
+    """Lazy-load the recognizer and cascade once, on first call."""
+    global _att_recognizer, _att_face_cascade, _att_driver_df
+
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    if not os.path.isfile(harcascadePath):
+        return False, "Haar cascade file missing"
+
+    trainner_path = get_path("TrainingImageLabel/Trainner.yml")
+    if not os.path.isfile(trainner_path):
+        return False, "No trained model found - please Save Profile first"
+
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+    if not os.path.isfile(csv_path):
+        return False, "Driver details CSV missing"
+
+    _att_face_cascade = cv2.CascadeClassifier(harcascadePath)
+
+    _att_recognizer = cv2.face.LBPHFaceRecognizer_create()
+    _att_recognizer.read(trainner_path)
+
+    df = pd.read_csv(csv_path)
+    df.columns = df.columns.str.strip()
+    df = df.dropna(axis=1, how='all')
+    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
+    df['SERIAL NO.'] = pd.to_numeric(df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
+    _att_driver_df = df
+
+    return True, "OK"
 
 
 def process_attendance_frame(frame, alerts_flags=None):
     """
-    Run face recognition on *frame*.
-    Annotates the frame and updates stats["attendance_logged"].
-    Returns the annotated frame.
+    Process a single frame for attendance/face recognition.
+    Intended to be called from main.py each frame.
+
+    Args:
+        frame:        BGR frame from OpenCV capture.
+        alerts_flags: Optional dict (unused here but kept consistent with
+                      the other process_*_frame signatures).
+
+    Returns:
+        annotated_frame: Frame with recognition overlay drawn on it.
+        status: dict with keys:
+            - 'face_found'    (bool)
+            - 'recognized'    (bool)
+            - 'driver_id'     (str or None)
+            - 'driver_name'   (str or None)
+            - 'confidence'    (float or None)
+            - 'attendance_marked' (bool)  True only on the frame it was written
     """
-    _load_models()
+    global _att_recognizer, _att_face_cascade, _att_driver_df, _att_last_recognition
 
-    if _face_cascade is None or _recognizer is None:
-        cv2.putText(frame, "TRAIN MODEL FIRST", (10, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        return frame
+    status = {
+        "face_found":        False,
+        "recognized":        False,
+        "driver_id":         None,
+        "driver_name":       None,
+        "confidence":        None,
+        "attendance_marked": False,
+    }
 
-    # Load driver CSV for name look-up
-    csv_path = get_path("DriverDetails/DriverDetails.csv")
-    driver_df = None
-    if os.path.isfile(csv_path):
-        try:
-            driver_df = pd.read_csv(csv_path)
-            driver_df.columns = driver_df.columns.str.strip()
-            driver_df = driver_df.dropna(axis=1, how='all')
-            driver_df = driver_df.loc[:, ~driver_df.columns.str.startswith('Unnamed')]
-            driver_df['SERIAL NO.'] = pd.to_numeric(
-                driver_df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
-        except Exception:
-            driver_df = None
+    # Lazy-load models on first call
+    if _att_recognizer is None:
+        ok, msg = _att_load_models()
+        if not ok:
+            # Draw error message on frame and return early
+            cv2.putText(frame, f"Attendance: {msg}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 200), 2)
+            return frame, status
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = _face_cascade.detectMultiScale(gray, 1.2, 5)
+    gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = _att_face_cascade.detectMultiScale(gray, 1.2, 5)
 
     for (x, y, w, h) in faces:
+        status["face_found"] = True
         cv2.rectangle(frame, (x, y), (x + w, y + h), (225, 0, 0), 2)
-        serial, conf = _recognizer.predict(gray[y:y + h, x:x + w])
+
+        serial, conf = _att_recognizer.predict(gray[y:y + h, x:x + w])
+        status["confidence"] = conf
 
         if conf < 50:
-            name = str(serial)
-            if driver_df is not None:
-                row = driver_df[driver_df['SERIAL NO.'] == int(serial)]
-                if len(row) > 0:
-                    name = str(row['NAME'].values[0]).strip()
+            # Look up driver details
+            row = _att_driver_df[_att_driver_df['SERIAL NO.'] == int(serial)]
+            if len(row) > 0:
+                driver_name = str(row['NAME'].values[0]).strip()
+                driver_id   = str(row['ID'].values[0]).strip()
+            else:
+                driver_name, driver_id = 'Unknown', 'Unknown'
 
-            cv2.putText(frame, name, (x, y + h),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            status["recognized"]  = True
+            status["driver_id"]   = driver_id
+            status["driver_name"] = driver_name
 
-            # Log attendance once per ID per session
-            if serial not in _attendance_marked:
-                _attendance_marked.add(serial)
-                _save_attendance(serial, name)
-                stats["attendance_logged"] = True
-                if alerts_flags is not None:
-                    alerts_flags["attendance"] = True
+            cv2.putText(frame, f"{driver_name} (ID:{driver_id})",
+                        (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7, (0, 255, 0), 2)
+
+            # Write attendance only once per recognition (avoid duplicate rows)
+            ts        = time.time()
+            date_str  = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+            time_str  = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+            record    = (driver_id, driver_name)
+
+            if _att_last_recognition != record:
+                _att_last_recognition = record
+                assure_path_exists("Attendance")
+                att_file = get_path(f"Attendance/Attendance_{date_str}.csv")
+                exists   = os.path.isfile(att_file)
+                row_data = [driver_id, driver_name, date_str, time_str]
+
+                with open(att_file, 'a+', newline='') as f:
+                    w_csv = csv.writer(f)
+                    if not exists:
+                        w_csv.writerow(_att_col_names)
+                    w_csv.writerow(row_data)
+
+                status["attendance_marked"] = True
+                print(f"Attendance marked: {driver_name} ({driver_id}) at {time_str}")
+
         else:
-            cv2.putText(frame, "Unknown", (x, y + h),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(frame, 'Unknown', (x, y + h + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    return frame
-
-
-def _save_attendance(serial, name):
-    assure_path_exists("Attendance")
-    ts = time.time()
-    date_str = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
-    time_str = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
-    att_file = get_path(f"Attendance/Attendance_{date_str}.csv")
-    row = [serial, name, date_str, time_str]
-    col_names = ['Id', 'Name', 'Date', 'Time']
-    exists = os.path.isfile(att_file)
-
-    with open(att_file, 'a+', newline='') as f:
-        w = csv.writer(f)
-        if not exists:
-            w.writerow(col_names)
-        w.writerow(row)
+    return frame, status
 
 
-# ── Stand-alone tkinter GUI (only when run directly) ─────────────────────────
+# ── Standalone GUI (only runs when executed directly) ──────────────────────────
 if __name__ == "__main__":
-    import tkinter as tk
-    from tkinter import ttk, messagebox as mess
-    import tkinter.simpledialog as tsd
+    key = ''
 
+    ts = time.time()
+    date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+    day, month, year = date.split("-")
 
-    def check_haarcascadefile():
-        if not os.path.isfile(get_path("haarcascade_frontalface_default.xml")):
-            mess.showerror('File missing', 'haarcascade_frontalface_default.xml not found')
-            window.destroy()
+    mont = {'01': 'January', '02': 'February', '03': 'March', '04': 'April',
+            '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+            '09': 'September', '10': 'October', '11': 'November', '12': 'December'}
 
-
-    def update_registration_count():
-        res = 0
-        csv_path = get_path("DriverDetails/DriverDetails.csv")
-        if os.path.isfile(csv_path):
-            with open(csv_path, 'r', newline='') as f:
-                rows = [r for r in csv.reader(f) if any(x.strip() for x in r)]
-            res = max(0, len(rows) - 1)
-        message.configure(text=f'Total Registrations: {res}')
-
-
-    def gui_take_images():
-        uid = txt.get().strip()
-        name = txt2.get().strip()
-        if not uid or not name:
-            mess.showwarning('Input', 'Please enter both ID and Name')
-            return
-        result = TakeImages(uid, name)
-        mess.showinfo('Done', result)
-        update_registration_count()
-
-
-    def gui_train():
-        result = TrainImages()
-        mess.showinfo('Done', result)
-
-
-    def gui_track():
-        check_haarcascadefile()
-        _load_models()
-        if _recognizer is None:
-            mess.showerror('Error', 'Train model first!')
-            return
-        csv_path = get_path("DriverDetails/DriverDetails.csv")
-        if not os.path.isfile(csv_path):
-            mess.showerror('Error', 'No driver details found!')
-            return
-        driver_df = pd.read_csv(csv_path)
-        driver_df.columns = driver_df.columns.str.strip()
-        driver_df = driver_df.dropna(axis=1, how='all')
-        driver_df['SERIAL NO.'] = pd.to_numeric(
-            driver_df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
-
-        cam = cv2.VideoCapture(0)
-        while True:
-            ret, im = cam.read()
-            if not ret:
-                break
-            gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-            faces = _face_cascade.detectMultiScale(gray, 1.2, 5)
-            for (x, y, w, h) in faces:
-                cv2.rectangle(im, (x, y), (x + w, y + h), (225, 0, 0), 2)
-                serial, conf = _recognizer.predict(gray[y:y + h, x:x + w])
-                if conf < 50:
-                    row = driver_df[driver_df['SERIAL NO.'] == int(serial)]
-                    name = str(row['NAME'].values[0]).strip() if len(row) > 0 else str(serial)
-                    cv2.putText(im, name, (x, y + h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                else:
-                    cv2.putText(im, 'Unknown', (x, y + h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.imshow('Attendance – press Q to quit', im)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-            if cv2.getWindowProperty('Attendance – press Q to quit', cv2.WND_PROP_VISIBLE) < 1:
-                break
-        cam.release()
-        cv2.destroyAllWindows()
-
-
-    # ── GUI layout ────────────────────────────────────────────────────────────
+    # GUI front end - only kept for individual unit test
     window = tk.Tk()
     window.title("Driver Attendance System")
-    window.geometry("600x400")
+    window.geometry("1200x700")
     window.configure(bg="#f5f7fa")
 
     style = ttk.Style()
     style.theme_use('clam')
 
-    ttk.Label(window, text="Driver Attendance System",
-              font=("Segoe UI", 18, "bold")).pack(pady=15)
+    # Style configs
+    style.configure("TFrame", background="#f5f7fa")
+    style.configure("TLabel", background="#f5f7fa", font=("Segoe UI", 11))
+    style.configure("Header.TLabel", font=("Segoe UI", 20, "bold"))
+    style.configure("SubHeader.TLabel", font=("Segoe UI", 14, "bold"))
+    style.configure("TButton", font=("Segoe UI", 11), padding=6)
 
-    frame_reg = ttk.Frame(window)
-    frame_reg.pack(pady=10)
+    # Header
+    header = ttk.Label(window, text="Driver Attendance System", style="Header.TLabel")
+    header.pack(pady=15)
 
-    ttk.Label(frame_reg, text="Driver ID:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
-    txt = ttk.Entry(frame_reg, width=25)
-    txt.grid(row=0, column=1, padx=5, pady=5)
+    top_frame = ttk.Frame(window)
+    top_frame.pack(fill="x", padx=20)
 
-    ttk.Label(frame_reg, text="Driver Name:").grid(row=1, column=0, padx=5, pady=5, sticky='e')
-    txt2 = ttk.Entry(frame_reg, width=25)
-    txt2.grid(row=1, column=1, padx=5, pady=5)
+    datef = ttk.Label(top_frame, text=f"{day}-{mont[month]}-{year}", font=("Segoe UI", 12))
+    datef.pack(side="left")
 
-    btn_frame = ttk.Frame(window)
-    btn_frame.pack(pady=10)
+    clock = ttk.Label(top_frame, font=("Segoe UI", 12))
+    clock.pack(side="right")
+    tick()
 
-    ttk.Button(btn_frame, text="Take Images", command=gui_take_images).grid(row=0, column=0, padx=10)
-    ttk.Button(btn_frame, text="Train Model", command=gui_train).grid(row=0, column=1, padx=10)
-    ttk.Button(btn_frame, text="Take Attendance", command=gui_track).grid(row=0, column=2, padx=10)
-    ttk.Button(btn_frame, text="Quit", command=window.destroy).grid(row=0, column=3, padx=10)
+    # Main container
+    container = ttk.Frame(window)
+    container.pack(fill="both", expand=True, padx=20, pady=20)
 
-    message = ttk.Label(window, text="")
+    left_frame = ttk.Frame(container)
+    left_frame.pack(side="left", fill="both", expand=True, padx=10)
+
+    right_frame = ttk.Frame(container)
+    right_frame.pack(side="right", fill="both", expand=True, padx=10)
+
+    # Attendance window
+    ttk.Label(left_frame, text="Attendance", style="SubHeader.TLabel").pack(pady=10)
+
+    trackImg = ttk.Button(left_frame, text="Take Attendance", command=TrackImages)
+    trackImg.pack(pady=10, fill="x")
+
+    tv = ttk.Treeview(left_frame, columns=('name', 'date', 'time'))
+    tv.heading('#0', text='ID')
+    tv.heading('name', text='Name')
+    tv.heading('date', text='Date')
+    tv.heading('time', text='Time')
+
+    tv.column('#0', width=80)
+    tv.column('name', width=120)
+    tv.column('date', width=120)
+    tv.column('time', width=120)
+
+    tv.pack(fill="both", expand=True, pady=10)
+
+    scroll = ttk.Scrollbar(left_frame, orient="vertical", command=tv.yview)
+    tv.configure(yscrollcommand=scroll.set)
+    scroll.pack(side="right", fill="y")
+
+    quitWindow = ttk.Button(left_frame, text="Quit", command=window.destroy)
+    quitWindow.pack(pady=10, fill="x")
+
+    # Registration menu
+    ttk.Label(right_frame, text="New Registration", style="SubHeader.TLabel").pack(pady=10)
+
+    ttk.Label(right_frame, text="Driver ID").pack(anchor="w", padx=5)
+    txt = ttk.Entry(right_frame)
+    txt.pack(fill="x", padx=5, pady=5)
+
+    ttk.Label(right_frame, text="Driver Name").pack(anchor="w", padx=5)
+    txt2 = ttk.Entry(right_frame)
+    txt2.pack(fill="x", padx=5, pady=5)
+
+    clearButton = ttk.Button(right_frame, text="Clear ID", command=clear)
+    clearButton.pack(pady=5, fill="x")
+
+    clearButton2 = ttk.Button(right_frame, text="Clear Name", command=clear2)
+    clearButton2.pack(pady=5, fill="x")
+
+    takeImg = ttk.Button(right_frame, text="Take Images", command=TakeImages)
+    takeImg.pack(pady=10, fill="x")
+
+    trainImg = ttk.Button(right_frame, text="Save Profile", command=psw)
+    trainImg.pack(pady=5, fill="x")
+
+    message1 = ttk.Label(right_frame, text="1) Take Images  →  2) Save Profile")
+    message1.pack(pady=10)
+
+    message = ttk.Label(right_frame, text="")
     message.pack(pady=5)
 
-    update_registration_count()
-    window.mainloop()
+    # Menu
+    menubar = tk.Menu(window)
+    filemenu = tk.Menu(menubar, tearoff=0)
+    filemenu.add_command(label='Change Password', command=change_pass)
+    filemenu.add_command(label='Contact Us', command=contact)
+    filemenu.add_separator()
+    filemenu.add_command(label='Exit', command=window.destroy)
 
+    menubar.add_cascade(label='Help', menu=filemenu)
+    window.config(menu=menubar)
+
+    # Running the GUI
+    update_registration_count()
+
+    window.mainloop()

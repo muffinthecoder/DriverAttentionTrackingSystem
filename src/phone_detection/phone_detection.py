@@ -1,9 +1,10 @@
 # This file contains the main code for the Phone detection sub-system of DATS+
+# Type "python src/phone_detection/phone_detection.py " on the terminal to run it individually
 # This code also contains a simple GUI in order to test just this unit alone later.
 # Code provided by: Fatima Faisal
 
 
-# ── Imports ──────────────────────────────────────────────────────────────────
+#Imports
 import cv2
 import argparse
 import os
@@ -15,10 +16,9 @@ import sys
 
 # Add parent folder (src/) to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils import stats, announce_violation
 
-# ── Audio alert ───────────────────────────────────────────────────────────────
+# Audio alert
 frequency = 2000
 duration = 1500
 
@@ -34,7 +34,7 @@ def play_beep():
         print('\a')
 
 
-# ── Detection zone helpers ────────────────────────────────────────────────────
+# Detection zone helpers
 def draw_detection_zone(frame, width, height):
     zone_points = np.array(
         [[0, 0], [width // 2, 0], [width // 2, height], [0, height]], np.int32
@@ -53,9 +53,8 @@ def is_in_zone(bbox, zone_points):
     return cv2.pointPolygonTest(zone_points, (cx, cy), False) >= 0
 
 
-# ── Lazy-load the YOLO model once ────────────────────────────────────────────
+# Lazy-load the YOLO model once
 _yolo_model = None
-
 
 def _get_model():
     global _yolo_model
@@ -64,11 +63,11 @@ def _get_model():
     return _yolo_model
 
 
-# ── Per-frame state ───────────────────────────────────────────────────────────
+# Per-frame state
 _phone_start = None  # timestamp when phone first appeared in zone
 
 
-# ── Integration entry-point ──────────────────────────────────────────────────
+# Integration entry-point
 def process_phone_frame(frame, alerts_flags=None):
     """
     Run YOLOv8 phone detection on *frame*.
@@ -110,7 +109,7 @@ def process_phone_frame(frame, alerts_flags=None):
                 cv2.putText(frame, f"person {confidence:.2f}", (int(x1), int(y1) - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 165, 0), 2)
 
-    # ── Time tracking ─────────────────────────────────────────────────────────
+    # Time tracking
     now = time.time()
     if phone_in_zone:
         if _phone_start is None:
@@ -136,7 +135,7 @@ def process_phone_frame(frame, alerts_flags=None):
     return frame
 
 
-# ── Stand-alone test entry-point ──────────────────────────────────────────────
+# Stand-alone test entry-point
 def parse_arguments():
     parser = argparse.ArgumentParser(description="YOLOv8 live phone detection")
     parser.add_argument("--webcam-resolution", default=[1280, 720], nargs=2, type=int)
