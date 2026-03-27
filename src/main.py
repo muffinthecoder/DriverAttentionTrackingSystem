@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import stats, announce_violation
 from camera import Camera, get_rgb_frame
+import base64
 
 import streamlit as st
 import time
@@ -16,11 +17,21 @@ import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
 # SUBSYSTEMS
-
 from phone_detection.phone_detection import process_phone_frame
 from drowsiness_detection.drowsiness import process_drowsiness_frame
-from attendance_system.face_detection import TakeImages, TrainImages, process_attendance_frame
+from attendance_system.face_detection import (
+    TakeImages_streamlit,
+    TrainImages,
+    process_attendance_frame
+)
 
+# logo
+logo_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "assets",
+    "logo.png"
+)
 # PAGE CONFIG
 st.set_page_config(page_title="Driver Attention Tracking System (DATS+)", layout="wide")
 
@@ -31,6 +42,8 @@ def load_css():
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 load_css()
+
+
 
 # HEADER
 
@@ -46,22 +59,94 @@ st.markdown("""
 # TABS
 tab1, tab2, tab3 = st.tabs(["📸 Register Face", "📊 Monitoring", "👥 About Us"])
 
+
+
 # TAB 1: FACE REGISTRATION
+
+
+
+class RegisterProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.frame = None
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        self.frame = img
+        return frame
+
+if "show_camera" not in st.session_state:
+    st.session_state.show_camera = False
+
 with tab1:
     st.subheader("Register Driver")
+
     user_id   = st.text_input("Enter ID")
     user_name = st.text_input("Enter Name")
 
-    if st.button("Capture Images"):
+    st.info("📸 Camera is live. Click 'Start Capturing' to begin registering your face.")
+    if st.button("Open Camera"):
         if user_id and user_name:
-            result = TakeImages(user_id, user_name)
-            st.success(result if result else "Images Captured")
+            st.session_state.show_camera = True
         else:
-            st.warning("Please enter both ID and Name.")
+            st.warning("Enter ID and Name")
+
+    if st.session_state.show_camera:
+        st.markdown("### Camera Active")
+
+        RTC_CONFIG = RTCConfiguration({
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+        })
+
+        ctx = webrtc_streamer(
+            key="register",
+            video_processor_factory=RegisterProcessor,
+            rtc_configuration=RTC_CONFIG,
+            media_stream_constraints={"video": True, "audio": False},
+        )
+
+        if st.button("Capture Images"):
+            if ctx.video_processor:
+                success, msg = TakeImages_streamlit(
+                    user_id,
+                    user_name,
+                    ctx.video_processor
+                )
+
+                if success:
+                    st.success(msg)
+                    st.session_state.show_camera = False
+                else:
+                    st.error(msg)
 
     if st.button("Train Model"):
-        msg = TrainImages()
-        st.success(msg if msg else "Model Trained")
+        success, msg = TrainImages()
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
+
+    st.markdown("""
+    <div style="
+        background-color:#f0f6ff;
+        padding:15px;
+        border-radius:10px;
+        border-left:5px solid #4a90e2;
+        margin-bottom:15px;
+    ">
+    <h4 style="margin-bottom:8px;">📘 How Registration Works</h4>
+    <p style="margin:0; font-size:14px;">
+    To enable automatic attendance tracking, you must first register the driver's face.<br><br>
+
+    <strong>Steps:</strong><br>
+    1️⃣ Enter Driver ID and Name<br>
+    2️⃣ Click <strong>"Capture Images"</strong> to open the camera<br>
+    3️⃣ Click <strong>"Start Capturing"</strong> to collect face images<br>
+    4️⃣ Click <strong>"Train Model"</strong> to save the profile<br><br>
+
+    ⚠️ <strong>Note:</strong> You need to click capture twice — first to open the camera, then to start capturing images.
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # TAB 2: MONITORING
 with tab2:
@@ -222,9 +307,18 @@ further validation and regulatory approval.</span></p>
 </div>""", unsafe_allow_html=True)
 
 
-
 # FOOTER
+#logo added to website
 st.markdown("---")
+with open(logo_path, "rb") as f:
+    logo_base64 = base64.b64encode(f.read()).decode()
+
+st.markdown(f"""
+<div style="text-align:center; margin-top:0.5px; margin-bottom:0.5px;">
+    <img src="data:image/png;base64,{logo_base64}" 
+         style="height:300px; margin-bottom:5px;">
+</div>
+""", unsafe_allow_html=True)
 st.markdown("""
 <div class="footer">
     <p>Driver Attention Tracking System (DATS+) &nbsp;|&nbsp; AI-powered Safety Dashboard</p>

@@ -83,6 +83,55 @@ def save_pass():
     mess._show(title='Password Changed', message='Password changed successfully!!')
     master.destroy()
 
+def TakeImages_streamlit(Id, name, processor):
+    check_haarcascadefile()
+
+    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    detector = cv2.CascadeClassifier(harcascadePath)
+
+    sampleNum = 0
+
+    assure_path_exists("TrainingImage")
+    assure_path_exists("DriverDetails")
+
+    csv_path = get_path("DriverDetails/DriverDetails.csv")
+
+    if os.path.isfile(csv_path):
+        with open(csv_path, 'r') as f:
+            serial = len(list(csv.reader(f)))
+    else:
+        serial = 1
+
+    start_time = time.time()
+
+    while sampleNum < 50:
+        frame = processor.frame
+
+        if frame is None:
+            continue
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = detector.detectMultiScale(gray, 1.3, 5)
+
+        for (x, y, w, h) in faces:
+            sampleNum += 1
+
+            img_path = get_path(
+                f"TrainingImage/{name}.{serial}.{Id}.{sampleNum}.jpg"
+            )
+
+            cv2.imwrite(img_path, gray[y:y + h, x:x + w])
+
+        if time.time() - start_time > 10:
+            break
+
+    row = [serial, '', Id, '', name]
+
+    with open(csv_path, 'a+', newline='') as f:
+        csv.writer(f).writerow(row)
+
+    return True, f"{sampleNum} images captured"
+
 def change_pass():
     global master
     master = tk.Tk()
