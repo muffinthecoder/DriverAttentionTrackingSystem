@@ -1,7 +1,7 @@
 # This file contains the main code for the Phone detection sub-system of DATS+
 # Type "python src/phone_detection/phone_detection.py " on the terminal to run it individually
-# This code also contains a simple GUI in order to test just this unit alone later.
 # Code provided by: Fatima Faisal
+# Fixed by:Pooja Gurnani
 
 
 #Imports
@@ -134,14 +134,14 @@ def process_phone_frame(frame, alerts_flags=None):
     else:
         _phone_start = None
 
-    # HUD
+    
     cv2.putText(frame, f"Phone Time: {stats['phone_time']:.1f}s", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
     return frame
 
 
-# Stand-alone test entry-point
+# Stand alone test entry point
 def parse_arguments():
     parser = argparse.ArgumentParser(description="YOLOv8 live phone detection")
     parser.add_argument("--webcam-resolution", default=[1280, 720], nargs=2, type=int)
