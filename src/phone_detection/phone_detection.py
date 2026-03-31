@@ -23,7 +23,6 @@ from utils import stats, announce_violation
 frequency = 2000
 duration = 1500
 
-
 def play_beep():
     def _beep():
         system = platform.system()
