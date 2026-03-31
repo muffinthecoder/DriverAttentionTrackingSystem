@@ -1,0 +1,8 @@
+path: C:\Users\pgurn\PyCharmMiscProject\yolo_dataset
+train: images/train
+val: images/val
+
+nc: 2
+names:
+  0: no_phone
+  1: phone
