@@ -23,15 +23,20 @@ frequency = 2000
 duration = 1500
 
 
+import threading
+
 def play_beep():
-    system = platform.system()
-    if system == "Windows":
-        import winsound
-        winsound.Beep(frequency, duration)
-    elif system == "Darwin":
-        os.system('afplay /System/Library/Sounds/Ping.aiff &')
-    else:
-        print('\a')
+    def _run():
+        system = platform.system()
+        if system == "Windows":
+            import winsound
+            winsound.Beep(frequency, duration)
+        elif system == "Darwin":
+            os.system('afplay /System/Library/Sounds/Ping.aiff &')
+        else:
+            print('\a')
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 # Detection zone helpers
@@ -114,8 +119,9 @@ def process_phone_frame(frame, alerts_flags=None):
     if phone_in_zone:
         if _phone_start is None:
             _phone_start = now
-        # accumulate elapsed since last frame
-        stats["phone_time"] += now - _phone_start
+
+        elapsed = now - _phone_start
+        stats["phone_time"] += elapsed
         _phone_start = now
 
         play_beep()

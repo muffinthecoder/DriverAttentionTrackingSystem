@@ -6,3 +6,6 @@ __pycache__/
 .vscode/
 models/*.pt
 models/*.pkl
+.venv/
+src/attendance_system/TrainingImage/
+src/attendance_dataset/

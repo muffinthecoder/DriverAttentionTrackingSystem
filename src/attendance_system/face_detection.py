@@ -5,9 +5,7 @@
 # Additional credits: Code dependancies and GUI fixes by Fatima Faisal
 
 #Imports
-import tkinter as tk
 from tkinter import ttk
-from tkinter import messagebox as mess
 import tkinter.simpledialog as tsd
 import cv2, os
 import csv
@@ -40,13 +38,22 @@ def tick():
     clock.after(200, tick)
 
 def contact():
-    mess._show(title='Contact us', message="Please contact us on : 'xxxxxxxxxxxxx@gmail.com' ")
+    return False, "Contact: xxxxxxxxxxxxx@gmail.com"
+
+import cv2
 
 def check_haarcascadefile():
-    exists = os.path.isfile(get_path("haarcascade_frontalface_default.xml"))
-    if not exists:
-        mess._show(title='Some file missing', message='Please contact us for help')
-        window.destroy()
+    try:
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        exists = os.path.isfile(cascade_path)
+
+        if not exists:
+            return False, "Haarcascade file missing"
+
+        return True, None
+
+    except Exception as e:
+        return False, str(e)
 
 def save_pass():
     assure_path_exists("TrainingImageLabel")
@@ -59,13 +66,12 @@ def save_pass():
         master.destroy()
         new_pas = tsd.askstring('Old Password not found', 'Please enter a new password below', show='*')
         if new_pas is None:
-            mess._show(title='No Password Entered', message='Password not set!! Please try again')
+            return False, "Password not set"
         else:
             tf = open(get_path("TrainingImageLabel/psd.txt"), "w")
             tf.write(new_pas)
             tf.close()
-            mess._show(title='Password Registered', message='New password was registered successfully!!')
-            return
+            return True, "New password was registered successfully"
     op = old.get()
     newp = new.get()
     nnewp = nnew.get()
@@ -75,18 +81,20 @@ def save_pass():
             txf.write(newp)
             txf.close()
         else:
-            mess._show(title='Error', message='Confirm new password again!!!')
-            return
+            return False, "Confirm new password again"
     else:
-        mess._show(title='Wrong Password', message='Please enter correct old password.')
-        return
-    mess._show(title='Password Changed', message='Password changed successfully!!')
-    master.destroy()
+        return False, "Wrong password"
+    return True, "Password changed successfully"
 
 def TakeImages_streamlit(Id, name, processor):
-    check_haarcascadefile()
+    ok, msg = check_haarcascadefile()
+    if not ok:
+        return False, msg
 
-    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    import cv2
+
+
+    harcascadePath = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(harcascadePath)
 
     sampleNum = 0
@@ -172,20 +180,19 @@ def psw():
     else:
         new_pas = tsd.askstring('Old Password not found', 'Please enter a new password below', show='*')
         if new_pas is None:
-            mess._show(title='No Password Entered', message='Password not set!! Please try again')
+            return False, "Password not set"
         else:
             tf = open(get_path("TrainingImageLabel/psd.txt"), "w")
             tf.write(new_pas)
             tf.close()
-            mess._show(title='Password Registered', message='New password was registered successfully!!')
-            return
+            return True, "New password was registered successfully"
     password = tsd.askstring('Password', 'Enter Password', show='*')
     if password == key:
-        TrainImages()
+        return TrainImages()
     elif password is None:
-        pass
+        return False, "No password entered"
     else:
-        mess._show(title='Wrong Password', message='You have entered wrong password')
+        return False, "Wrong password"
 
 def clear():
     txt.delete(0, 'end')
@@ -218,12 +225,17 @@ def TakeImages(Id=None, name=None):
     if name is None:
         name = txt2.get()
 
-    check_haarcascadefile()
+    ok, msg = check_haarcascadefile()
+    if not ok:
+        return False, msg
+
     columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
     assure_path_exists("DriverDetails")
     assure_path_exists("TrainingImage")
+
     serial = 0
     csv_path = get_path("DriverDetails/DriverDetails.csv")
+
     if os.path.isfile(csv_path):
         with open(csv_path, 'r', newline='') as csvFile1:
             reader1 = csv.reader(csvFile1)
@@ -235,46 +247,61 @@ def TakeImages(Id=None, name=None):
         serial = 0
 
     serial = serial + 1
-    standalone = __name__ == "__main__"  # True only when run directly
+    standalone = __name__ == "__main__"
 
     if (name.isalpha()) or (' ' in name):
         cam = cv2.VideoCapture(0)
-        harcascadePath = get_path("haarcascade_frontalface_default.xml")
+
+        harcascadePath = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         detector = cv2.CascadeClassifier(harcascadePath)
+
         sampleNum = 0
+
         while True:
             ret, img = cam.read()
             if not ret:
                 break
+
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             faces = detector.detectMultiScale(gray, 1.3, 5)
+
             for (x, y, w, h) in faces:
                 cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+
                 sampleNum += 1
-                img_path = get_path("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+
+                img_path = get_path(
+                    "TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg"
+                )
+
                 cv2.imwrite(img_path, gray[y:y + h, x:x + w])
+
                 if standalone:
-                    cv2.imshow('Taking Images', img)  # only in standalone GUI
+                    cv2.imshow('Taking Images', img)
+
             if standalone and cv2.waitKey(100) & 0xFF == ord('q'):
                 break
             elif sampleNum > 50:
                 break
+
         cam.release()
+
         if standalone:
             cv2.destroyAllWindows()
-
 
         row = [serial, '', Id, '', name]
         with open(csv_path, 'a+', newline='') as csvFile:
             csv.writer(csvFile).writerow(row)
-        # Only update tkinter label if running standalone
+
         if 'message1' in globals() and globals()['message1'] is not None:
             try:
                 globals()['message1'].configure(text="Images Taken for ID : " + Id)
             except Exception:
                 pass
+
         update_registration_count()
         return True, f"Images captured successfully for ID: {Id}"
+
     else:
         if 'message1' in globals() and globals()['message1'] is not None:
             try:
@@ -283,26 +310,36 @@ def TakeImages(Id=None, name=None):
                 pass
         return False, "Enter a correct name (letters and spaces only)"
 
-
 def TrainImages():
-    check_haarcascadefile()
+    ok, msg = check_haarcascadefile()
+    if not ok:
+        return False, msg
+
+    import cv2
+    import numpy as np
+
     assure_path_exists("TrainingImageLabel")
+
     recognizer = cv2.face.LBPHFaceRecognizer_create()
-    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+
+    harcascadePath = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(harcascadePath)
+
     faces, ID = getImagesAndLabels(get_path("TrainingImage"))
+
     try:
         recognizer.train(faces, np.array(ID))
     except Exception:
-        mess._show(title='No Registrations', message='Please Register someone first!!!')
         return False, "No registrations found"
+
     recognizer.save(get_path("TrainingImageLabel/Trainner.yml"))
-    # Only update tkinter label if running standalone
+
     if 'message1' in globals() and globals()['message1'] is not None:
         try:
             globals()['message1'].configure(text="Profile Saved Successfully")
         except Exception:
             pass
+
     update_registration_count()
     return True, "Profile saved successfully"
 
@@ -320,72 +357,87 @@ def getImagesAndLabels(path):
     return faces, Ids
 
 def TrackImages():
-    check_haarcascadefile()
+    ok, msg = check_haarcascadefile()
+    if not ok:
+        return False, msg
+
     assure_path_exists("Attendance")
     assure_path_exists("DriverDetails")
+
     for k in tv.get_children():
         tv.delete(k)
+
     i = 0
     attendance = []
 
     recognizer = cv2.face.LBPHFaceRecognizer_create()
     trainner_path = get_path("TrainingImageLabel/Trainner.yml")
+
     if os.path.isfile(trainner_path):
         recognizer.read(trainner_path)
     else:
-        mess._show(title='Data Missing', message='Please click on Save Profile to reset data!!')
-        return
+        return False, "Model missing - please Save Profile first"
 
-    harcascadePath = get_path("haarcascade_frontalface_default.xml")
-    faceCascade = cv2.CascadeClassifier(harcascadePath)
+    # ✅ FIXED: portable OpenCV cascade path
+    faceCascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+
     cam = cv2.VideoCapture(0)
     font = cv2.FONT_HERSHEY_SIMPLEX
     col_names = ['Id', 'Name', 'Date', 'Time']
 
     csv_path = get_path("DriverDetails/DriverDetails.csv")
+
     if os.path.isfile(csv_path):
         df = pd.read_csv(csv_path)
-        # FIX: strip column names and drop empty columns
         df.columns = df.columns.str.strip()
         df = df.dropna(axis=1, how='all')
         df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
-        # FIX: make SERIAL NO. int for comparison
         df['SERIAL NO.'] = pd.to_numeric(df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
     else:
-        mess._show(title='Details Missing', message='Students details are missing, please check!')
         cam.release()
         cv2.destroyAllWindows()
-        return
+        return False, "Driver details missing"
 
     while True:
         ret, im = cam.read()
         if not ret:
             break
+
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+
         for (x, y, w, h) in faces:
             cv2.rectangle(im, (x, y), (x + w, y + h), (225, 0, 0), 2)
+
             serial, conf = recognizer.predict(gray[y:y + h, x:x + w])
+
             if conf < 50:
                 ts = time.time()
                 date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
                 timeStamp = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
-                # FIX: proper int comparison for serial number
+
                 row = df[df['SERIAL NO.'] == int(serial)]
+
                 if len(row) > 0:
                     bb = str(row['NAME'].values[0]).strip()
                     ID = str(row['ID'].values[0]).strip()
                 else:
                     bb = 'Unknown'
                     ID = 'Unknown'
+
                 attendance = [ID, bb, date, timeStamp]
                 cv2.putText(im, bb, (x, y + h), font, 1, (0, 255, 0), 2)
+
             else:
                 cv2.putText(im, 'Unknown', (x, y + h), font, 1, (0, 0, 255), 2)
+
         cv2.imshow('Taking Attendance', im)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-        # FIX: also close when camera window X is clicked
+
         if cv2.getWindowProperty('Taking Attendance', cv2.WND_PROP_VISIBLE) < 1:
             break
 
@@ -393,12 +445,12 @@ def TrackImages():
     cv2.destroyAllWindows()
 
     if not attendance:
-        mess._show(title='No Attendance', message='No face recognized. Please try again.')
-        return
+        return False, "No face recognized"
 
     ts = time.time()
     date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
     att_file = get_path("Attendance/Attendance_" + date + ".csv")
+
     exists = os.path.isfile(att_file)
 
     if exists:
@@ -412,25 +464,22 @@ def TrackImages():
 
     with open(att_file, 'r', newline='') as csvFile1:
         reader1 = csv.reader(csvFile1)
-        next(reader1)  # skip header
+        next(reader1)
+
         for lines in reader1:
             if len(lines) >= 4:
-                tv.insert('', 0, text=str(lines[0]), values=(str(lines[1]), str(lines[2]), str(lines[3])))
+                tv.insert('', 0, text=str(lines[0]),
+                          values=(str(lines[1]), str(lines[2]), str(lines[3])))
 
-    mess._show(title='Attendance Marked', message='Attendance marked successfully!')
-
-# Shared state for when called externally via process_attendance_frame()
-_att_recognizer       = None
-_att_face_cascade     = None
-_att_driver_df        = None
-_att_last_recognition = None   # (ID, name, timestamp) of last recognized face
-_att_col_names        = ['Id', 'Name', 'Date', 'Time']
+    return True, "Attendance marked successfully"
 
 def _att_load_models():
     """Lazy-load the recognizer and cascade once, on first call."""
     global _att_recognizer, _att_face_cascade, _att_driver_df
 
-    harcascadePath = get_path("haarcascade_frontalface_default.xml")
+    # ✅ FIXED: portable OpenCV cascade path
+    harcascadePath = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+
     if not os.path.isfile(harcascadePath):
         return False, "Haar cascade file missing"
 
@@ -452,6 +501,7 @@ def _att_load_models():
     df = df.dropna(axis=1, how='all')
     df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
     df['SERIAL NO.'] = pd.to_numeric(df['SERIAL NO.'], errors='coerce').fillna(0).astype(int)
+
     _att_driver_df = df
 
     return True, "OK"
@@ -555,6 +605,8 @@ def process_attendance_frame(frame, alerts_flags=None):
 
 # ── Standalone GUI (only runs when executed directly) ──────────────────────────
 if __name__ == "__main__":
+    import tkinter as tk
+
     key = ''
 
     ts = time.time()
