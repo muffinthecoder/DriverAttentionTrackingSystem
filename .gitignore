@@ -8,4 +8,4 @@ models/*.pt
 models/*.pkl
 .venv/
 src/attendance_system/TrainingImage/
-src/attendance_dataset/
+src/attendance_dataset/src/attendance_system/TrainingImageLabel/Trainner.yml
