@@ -3,7 +3,6 @@
 # Code provided by: Fatima Faisal
 # Fixed by:Pooja Gurnani
 
-
 #Imports
 import cv2
 import argparse
@@ -13,6 +12,7 @@ import time
 import numpy as np
 from ultralytics import YOLO
 import sys
+import threading
 
 # Add parent folder (src/) to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,9 +21,6 @@ from utils import stats, announce_violation
 # Audio alert
 frequency = 2000
 duration = 1500
-
-
-import threading
 
 def play_beep():
     def _run():
