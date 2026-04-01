@@ -14,6 +14,9 @@ import numpy as np
 from ultralytics import YOLO
 import sys
 import threading
+import subprocess
+
+
 
 # Add parent folder (src/) to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,6 +25,32 @@ from utils import stats, announce_violation
 # Audio alert
 frequency = 2000
 duration = 1500
+_PLATFORM = platform.system()
+
+if _PLATFORM == "Windows":
+    ps_process = subprocess.Popen(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    ps_process.stdin.write(b"Add-Type -AssemblyName System.Speech\n")
+    ps_process.stdin.flush()
+    _tts = "(New-Object System.Speech.Synthesis.SpeechSynthesizer)"
+else:
+    ps_process = None
+
+def beep_then_speak(freq, duration_ms, text):
+    def _run():
+        if _PLATFORM == "Windows":
+            cmd = f"[console]::beep({freq},{duration_ms}); {_tts}.Speak('{text}')\n"
+            ps_process.stdin.write(cmd.encode())
+            ps_process.stdin.flush()
+        elif _PLATFORM == "Darwin":
+            subprocess.run(["say", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(["espeak", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    threading.Thread(target=_run, daemon=True).start()
 
 def play_beep():
     def _beep():
@@ -96,7 +125,7 @@ def process_phone_frame(frame, alerts_flags=None):
     _last_person_boxes = []
 
     # Fine-tuned model for phone
-    results = model(frame, verbose=False, conf=0.55, iou=0.5)
+    results = model(frame, verbose=False, conf=0.5, iou=0.5)
     # Base model for person
     base_results = base_model(frame, verbose=False, conf=0.5, iou=0.5)
 
@@ -108,7 +137,7 @@ def process_phone_frame(frame, alerts_flags=None):
             cls_id = int(box.cls[0])
             class_name = model.names[cls_id]
             confidence = float(box.conf[0])
-            if class_name == "phone" and confidence > 0.55:
+            if class_name == "phone" and confidence > 0.5:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 phone_detected = True
                 current_boxes.append((int(x1), int(y1), int(x2), int(y2), confidence))
@@ -137,7 +166,7 @@ def process_phone_frame(frame, alerts_flags=None):
         _phone_start = now
 
         if now - _last_beep_time > 3:
-            play_beep()
+            beep_then_speak(2000, 500, "Phone usage detected")
             _last_beep_time = now
 
         cv2.putText(frame, "PHONE DETECTED!", (10, h - 30),
