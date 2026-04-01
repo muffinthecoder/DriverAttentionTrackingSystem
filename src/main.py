@@ -187,9 +187,8 @@ with tab2:
                 # PHASE 1: ATTENDANCE ONLY
                 # -------------------------
                 if not self.attendance_done:
-                    if self.frame_count % 10 == 0:  # throttle more aggressively
+                    if self.frame_count % 10 == 0:  # process every 10 frames
                         try:
-                            # Downscale for faster processing
                             small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
                             result = process_attendance_frame(small_img, self.alerts_flags)
                             if isinstance(result, tuple) and len(result) == 2:
@@ -197,34 +196,36 @@ with tab2:
                             else:
                                 img = result
                                 status = {}
-
                             status = status or {}
 
                             if status.get("recognized", False):
                                 self.attendance_done = True
                                 stats["attendance_logged"] = True
                                 print("✅ Attendance marked successfully")
-                            else:
-                                # If attendance fails after some frames, you can set attendance_done=True to avoid endless loop
-                                if self.frame_count > 200:  # arbitrary limit ~200 frames (~6-7 sec at 30fps)
-                                    self.attendance_done = True
-                                    print("⚠️ Attendance not recognized, moving to monitoring")
+                            elif self.frame_count > 200:
+                                self.attendance_done = True
+                                print("⚠️ Attendance not recognized, moving to monitoring")
                         except Exception as e:
                             print("⚠️ Attendance error:", e)
 
-                    # Return frame only for attendance; skip other detections
+                    # Return frame only for attendance phase
                     return av.VideoFrame.from_ndarray(img, format="bgr24")
 
                 # -------------------------
                 # PHASE 2: MONITORING (Phone + Drowsiness)
                 # -------------------------
-                if self.frame_count % 3 == 0:  # throttle monitoring
+                if self.frame_count % 3 == 0:  # throttle monitoring for performance
                     try:
-                        # Optional: downscale for speed
+                        # Downscale for speed
                         small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+
+                        # Phone detection
                         small_img = process_phone_frame(small_img, self.alerts_flags)
+
+                        # Drowsiness detection (uses the fixed version with timers)
                         small_img, _ = process_drowsiness_frame(small_img, self.alerts_flags)
-                        # Upscale back for display if needed
+
+                        # Upscale back to original for display
                         img = cv2.resize(small_img, (img.shape[1], img.shape[0]))
                     except Exception as e:
                         print("⚠️ Monitoring error:", e)
