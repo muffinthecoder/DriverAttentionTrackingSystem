@@ -112,6 +112,9 @@ ALERT_AUTH_SEC   = 10
 # Landmark drawings
 def draw_landmarks(frame, lm, img_w, img_h):
     """Draw eye outlines and mouth markers on the frame."""
+    original_h, original_w = frame.shape[:2]  # save original size
+
+    frame = cv2.resize(frame, (450, int(frame.shape[0] * 450 / frame.shape[1])))
     # Left eye — cyan outline + dots
     pts_l = np.array([[int(lm[i].x * img_w), int(lm[i].y * img_h)] for i in LEFT_EYE], np.int32)
     cv2.polylines(frame, [pts_l], isClosed=True, color=(255, 255, 0), thickness=1)
@@ -131,6 +134,7 @@ def draw_landmarks(frame, lm, img_w, img_h):
     cv2.circle(frame, mb, 3, (255, 0, 255), -1)
     cv2.line(frame, mt, mb, (255, 0, 255), 1)
 
+    frame = cv2.resize(frame, (original_w, original_h))  # resize back
     return frame
 
 # UI Helper function

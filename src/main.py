@@ -20,7 +20,7 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfigurati
 from phone_detection.phone_detection import process_phone_frame
 from drowsiness_detection.drowsiness import process_drowsiness_frame
 from attendance_system.face_detection import (
-    TakeImages_streamlit,
+    TakeImages,
     TrainImages,
     process_attendance_frame
 )
@@ -79,6 +79,7 @@ if "show_camera" not in st.session_state:
 
 with tab1:
     st.subheader("Register Driver")
+    registration_count_placeholder = st.empty()  # this replaces 'message'
 
     user_id   = st.text_input("Enter ID")
     user_name = st.text_input("Enter Name")
@@ -106,7 +107,7 @@ with tab1:
 
         if st.button("Capture Images"):
             if ctx.video_processor:
-                success, msg = TakeImages_streamlit(
+                success, msg = TakeImages(
                     user_id,
                     user_name,
                     ctx.video_processor
@@ -119,7 +120,7 @@ with tab1:
                     st.error(msg)
 
     if st.button("Train Model"):
-        success, msg = TrainImages()
+        success, msg = TrainImages(reg_placeholder=registration_count_placeholder)
         if success:
             st.success(msg)
         else:
@@ -172,18 +173,68 @@ with tab2:
         st.session_state.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
 
     # WEBRTC VIDEO PROCESSOR
-    # Uses OpenCV - need to change this later!!!
     class DriverMonitorProcessor(VideoProcessorBase):
         def __init__(self):
             self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
+            self.frame_count = 0
+            self.attendance_done = False
+            self.last_attendance_check = 0
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-            img = frame.to_ndarray(format="bgr24")
-            img = process_phone_frame(img, self.alerts_flags)
-            img = process_drowsiness_frame(img, self.alerts_flags)
-            img = process_attendance_frame(img, self.alerts_flags)
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
+            try:
+                img = frame.to_ndarray(format="bgr24")
+                self.frame_count += 1
 
+                # -------------------------
+                # PHASE 1: ATTENDANCE FIRST
+                # -------------------------
+                if not self.attendance_done:
+
+                    # 🔥 Run attendance ONLY every 5 frames (reduce lag)
+                    if self.frame_count % 5 == 0:
+
+                        try:
+                            result = process_attendance_frame(img, self.alerts_flags)
+                        except Exception as e:
+                            print("⚠️ Attendance error:", e)
+                            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+                        # ✅ SAFE unpacking
+                        if isinstance(result, tuple) and len(result) == 2:
+                            img, status = result
+                        else:
+                            img = result
+                            status = {}
+
+                        # ✅ FIX: prevent None crash
+                        if status is None:
+                            status = {}
+
+                        # ✅ DEBUG (optional, remove later)
+                        # print("Attendance status:", status)
+
+                        # ✅ FORCE detection check (robust)
+                        if status.get("recognized", False) is True:
+                            self.attendance_done = True
+                            stats["attendance_logged"] = True
+                            print("✅ Attendance marked successfully")
+
+                    return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+                # -------------------------
+                # PHASE 2: MONITORING MODE
+                # -------------------------
+
+                # 🔥 Run both models together but lighter
+                if self.frame_count % 3 == 0:
+                    img = process_phone_frame(img, self.alerts_flags)
+                    img, _ = process_drowsiness_frame(img, self.alerts_flags)
+
+                return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+            except Exception as e:
+                print("Error in recv:", e)
+                return frame
     # ICE/STUN config — needed for WebRTC to work on most networks
     RTC_CONFIG = RTCConfiguration({
         "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
