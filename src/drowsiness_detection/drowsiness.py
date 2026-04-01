@@ -167,136 +167,118 @@ def draw_ui(frame, alert_text, color, ear=None, mar=None):
 
     return frame
 
-# Shared state for when called externally via process_drowsiness_frame()
+# -------------------------
+# Updated drowsiness processing
+# -------------------------
 _ext_closed_start     = None
+_ext_mouth_start      = None
 _ext_no_face_cooldown = 0
-_ext_yawn_cooldown    = 0
-_ext_alerts_fired     = {"gentle": False, "strong": False, "loud": False, "auth": False}
+_ext_alerts_fired     = {"gentle": False, "strong": False, "loud": False, "auth": False, "yawn": False}
 
-# CALLABLE FUNCTION FOR main.py
 def process_drowsiness_frame(frame, alerts_flags=None):
     """
     Process a single frame for drowsiness detection.
-    Intended to be called from main.py each frame.
 
     Args:
-        frame:        BGR frame from OpenCV capture.
+        frame: BGR frame from OpenCV capture.
         alerts_flags: Optional external dict to override internal alert state.
-                      Must contain keys: 'gentle', 'strong', 'loud', 'auth'.
-                      If None, internal shared state is used.
-
+                      Must contain keys: 'gentle','strong','loud','auth','yawn'.
     Returns:
-        annotated_frame: Frame with UI overlay drawn on it.
-        status: dict with keys:
-            - 'alert_text'  (str)
-            - 'alert_color' (BGR tuple)
-            - 'ear'         (float or None)
-            - 'mar'         (float or None)
-            - 'drowsy'      (bool)
-            - 'yawning'     (bool)
-            - 'face_found'  (bool)
+        annotated_frame, status dict
     """
-    global _ext_closed_start, _ext_no_face_cooldown, _ext_yawn_cooldown, _ext_alerts_fired
+    global _ext_closed_start, _ext_mouth_start, _ext_no_face_cooldown, _ext_alerts_fired
 
-    # Use external alerts_flags if provided, otherwise use internal state
     alerts = alerts_flags if alerts_flags is not None else _ext_alerts_fired
 
-    # Resize frame for faster processing
-    frame = cv2.resize(frame, (450, int(frame.shape[0] * 450 / frame.shape[1])))
-    img_h, img_w = frame.shape[:2]
+    # Resize & convert for MediaPipe
+    frame_small = cv2.resize(frame, (450, int(frame.shape[0] * 450 / frame.shape[1])))
+    img_h, img_w = frame_small.shape[:2]
+    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame_small, cv2.COLOR_BGR2RGB))
 
-    # Convert to RGB for MediaPipe
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-
-    # Run face landmark detection
-    detection = face_landmarker.detect(mp_image)
-
-    # Default UI state each frame
-    current_alert = "Driver Alert"
-    alert_color   = (0, 200, 0)
+    detection = face_landmarker.detect(mp_img)
     ear = None
     mar = None
-    drowsy     = False
-    yawning    = False
+    drowsy = False
+    yawning = False
     face_found = bool(detection.face_landmarks)
+    alert_text = "Driver Alert"
+    alert_color = (0, 200, 0)
 
-    if detection.face_landmarks:
+    if face_found:
         lm = detection.face_landmarks[0]
 
-        # Draw eye and mouth landmarks on frame
-        frame = draw_landmarks(frame, lm, img_w, img_h)
-
         # Calculate metrics
-        ear = (eye_aspect_ratio(lm, LEFT_EYE, img_w, img_h) +
-               eye_aspect_ratio(lm, RIGHT_EYE, img_w, img_h)) / 2.0
+        ear = (eye_aspect_ratio(lm, LEFT_EYE, img_w, img_h) + eye_aspect_ratio(lm, RIGHT_EYE, img_w, img_h)) / 2
         mar = mouth_aspect_ratio(lm, img_w, img_h)
 
-        # yawn detection
-        if mar > YAWN_THRESH:
-            yawning       = True
-            current_alert = "YAWNING - Stay Alert!"
-            alert_color   = (0, 140, 255)
+        # Draw landmarks
+        frame = draw_landmarks(frame, lm, img_w, img_h)
 
-            now = time.time()
-            if now > _ext_yawn_cooldown:
-                beep_then_speak(800, 200, "Yawn detected. Please stay alert.")
-                _ext_yawn_cooldown = now + 8
-                print(f"Yawn detected - MAR: {mar:.1f}")
-
-        # eyes closed detection
+        # --------------------
+        # Eyes closed detection
+        # --------------------
         if ear < EAR_THRESH:
             drowsy = True
             if _ext_closed_start is None:
                 _ext_closed_start = time.time()
-                for k in alerts:
+                for k in ["gentle","strong","loud","auth"]:
                     alerts[k] = False
-
             elapsed = time.time() - _ext_closed_start
 
-            # Update UI state based on severity
-            if elapsed >= ALERT_GENTLE_SEC:
-                current_alert = "WARNING: Eyes Closing"
-                alert_color   = (0, 140, 255)
-
-            if elapsed >= ALERT_STRONG_SEC:
-                current_alert = "WARNING: DROWSY"
-                alert_color   = (0, 0, 220)
-
-            if elapsed >= ALERT_LOUD_SEC:
-                current_alert = "DANGER: VERY DROWSY"
-                alert_color   = (0, 0, 200)
-
-            if elapsed >= ALERT_AUTH_SEC:
-                current_alert = "CRITICAL: ALERTING FLEET"
-                alert_color   = (0, 0, 180)
-
-            # Fire audio/speech alerts
             if elapsed >= ALERT_GENTLE_SEC and not alerts["gentle"]:
                 beep_then_speak(1000, 400, "Stay alert.")
                 alerts["gentle"] = True
-
             if elapsed >= ALERT_STRONG_SEC and not alerts["strong"]:
                 beep_then_speak(1200, 600, "Warning. Wake up!")
                 alerts["strong"] = True
-
             if elapsed >= ALERT_LOUD_SEC and not alerts["loud"]:
                 beep_then_speak(1500, 1000, "Danger! Wake up now!")
                 alerts["loud"] = True
-
             if elapsed >= ALERT_AUTH_SEC and not alerts["auth"]:
                 beep_then_speak(1800, 1500, "Critical alert. Alerting fleet management.")
-                print(f"CRITICAL: Driver drowsy for {elapsed:.0f}s - alerting authorities")
                 alerts["auth"] = True
+                print(f"CRITICAL: Driver drowsy for {elapsed:.0f}s")
 
+            # Update UI
+            if elapsed >= ALERT_AUTH_SEC:
+                alert_text = "CRITICAL: ALERTING FLEET"
+                alert_color = (0,0,180)
+            elif elapsed >= ALERT_LOUD_SEC:
+                alert_text = "DANGER: VERY DROWSY"
+                alert_color = (0,0,200)
+            elif elapsed >= ALERT_STRONG_SEC:
+                alert_text = "WARNING: DROWSY"
+                alert_color = (0,0,220)
+            else:
+                alert_text = "WARNING: Eyes Closing"
+                alert_color = (0,140,255)
         else:
-            # Eyes open — reset timer
             _ext_closed_start = None
 
+        # --------------------
+        # Yawn detection (>2 sec)
+        # --------------------
+        if mar > YAWN_THRESH:
+            if _ext_mouth_start is None:
+                _ext_mouth_start = time.time()
+            elif time.time() - _ext_mouth_start >= 2:  # changed to 2 seconds
+                if not alerts["yawn"]:
+                    beep_then_speak(800, 300, "Yawn detected. Please stay alert.")
+                    alerts["yawn"] = True
+                    print(f"Yawn detected - MAR: {mar:.1f}")
+                yawning = True
+                alert_text = "YAWNING - Stay Alert!"
+                alert_color = (0, 140, 255)
+        else:
+            _ext_mouth_start = None
+            alerts["yawn"] = False
+
     else:
-        # No face detected
-        current_alert = "FACE NOT DETECTED"
-        alert_color   = (0, 0, 200)
+        # --------------------
+        # No face detected alert
+        # --------------------
+        alert_text = "FACE NOT DETECTED"
+        alert_color = (0,0,200)
 
         now = time.time()
         if now > _ext_no_face_cooldown:
@@ -305,16 +287,16 @@ def process_drowsiness_frame(frame, alerts_flags=None):
             print("WARNING: Eyes not visible")
 
     # Render UI overlay
-    frame = draw_ui(frame, current_alert, alert_color, ear, mar)
+    frame = draw_ui(frame, alert_text, alert_color, ear, mar)
 
     status = {
-        "alert_text":  current_alert,
+        "alert_text": alert_text,
         "alert_color": alert_color,
-        "ear":         ear,
-        "mar":         mar,
-        "drowsy":      drowsy,
-        "yawning":     yawning,
-        "face_found":  face_found,
+        "ear": ear,
+        "mar": mar,
+        "drowsy": drowsy,
+        "yawning": yawning,
+        "face_found": face_found,
     }
 
     return frame, status

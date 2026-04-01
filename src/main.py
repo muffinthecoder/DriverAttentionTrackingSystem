@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils import stats, announce_violation
 from camera import Camera, get_rgb_frame
 import base64
-
+from tkinter import filedialog
+import pandas as pd
 import streamlit as st
 import time
 import cv2
@@ -57,12 +58,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # TABS
-tab1, tab2, tab3 = st.tabs(["📸 Register Face", "📊 Monitoring", "👥 About Us"])
+tab1, tab2, tab3, tab4 = st.tabs(["📸 Register Face", "📊 Monitoring", "👤 Admin", "👥 About Us"])
 
 
 
 # TAB 1: FACE REGISTRATION
-
 
 
 class RegisterProcessor(VideoProcessorBase):
@@ -175,10 +175,10 @@ with tab2:
     # WEBRTC VIDEO PROCESSOR
     class DriverMonitorProcessor(VideoProcessorBase):
         def __init__(self):
-            self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
             self.frame_count = 0
             self.attendance_done = False
-            self.last_attendance_check = 0
+            self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
+            self.drowsy_start = None
 
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             try:
@@ -186,49 +186,60 @@ with tab2:
                 self.frame_count += 1
 
                 # -------------------------
-                # PHASE 1: ATTENDANCE FIRST
+                # PHASE 1: ATTENDANCE ONLY
                 # -------------------------
                 if not self.attendance_done:
-
-                    # 🔥 Run attendance ONLY every 5 frames (reduce lag)
-                    if self.frame_count % 5 == 0:
-
+                    if self.frame_count % 10 == 0:  # process every 10 frames
                         try:
-                            result = process_attendance_frame(img, self.alerts_flags)
+                            small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+                            result = process_attendance_frame(small_img, self.alerts_flags)
+                            if isinstance(result, tuple) and len(result) == 2:
+                                img, status = result
+                            else:
+                                img = result
+                                status = {}
+                            status = status or {}
+
+                            if status.get("recognized", False):
+                                self.attendance_done = True
+                                stats["attendance_logged"] = True
+                                print("✅ Attendance marked successfully")
+                            elif self.frame_count > 200:
+                                self.attendance_done = True
+                                print("⚠️ Attendance not recognized, moving to monitoring")
                         except Exception as e:
                             print("⚠️ Attendance error:", e)
-                            return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-                        # ✅ SAFE unpacking
-                        if isinstance(result, tuple) and len(result) == 2:
-                            img, status = result
-                        else:
-                            img = result
-                            status = {}
-
-                        # ✅ FIX: prevent None crash
-                        if status is None:
-                            status = {}
-
-                        # ✅ DEBUG (optional, remove later)
-                        # print("Attendance status:", status)
-
-                        # ✅ FORCE detection check (robust)
-                        if status.get("recognized", False) is True:
-                            self.attendance_done = True
-                            stats["attendance_logged"] = True
-                            print("✅ Attendance marked successfully")
-
+                    # Return frame only for attendance phase
                     return av.VideoFrame.from_ndarray(img, format="bgr24")
 
                 # -------------------------
-                # PHASE 2: MONITORING MODE
+                # PHASE 2: MONITORING (Phone + Drowsiness)
                 # -------------------------
+                if self.frame_count % 3 == 0:  # throttle monitoring for performance
+                    try:
+                        # Downscale for speed
+                        small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
 
-                # 🔥 Run both models together but lighter
-                if self.frame_count % 3 == 0:
-                    img = process_phone_frame(img, self.alerts_flags)
-                    img, _ = process_drowsiness_frame(img, self.alerts_flags)
+                        # Phone detection
+                        small_img = process_phone_frame(small_img, self.alerts_flags)
+
+                        # Drowsiness detection (uses the fixed version with timers)
+                        small_img, drowsy_status = process_drowsiness_frame(small_img, self.alerts_flags)
+
+                        #
+                        if drowsy_status and drowsy_status.get("drowsy", False):
+                            if self.drowsy_start is None:
+                                self.drowsy_start = time.time()
+                        else:
+                            if self.drowsy_start is not None:
+                                stats["drowsy_time"] += time.time() - self.drowsy_start
+                                self.drowsy_start = None
+
+                        # Upscale back to original for display
+                        img = cv2.resize(small_img, (img.shape[1], img.shape[0]))
+                    except Exception as e:
+                        print("⚠️ Monitoring error:", e)
 
                 return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -244,10 +255,9 @@ with tab2:
         key="driver-monitor",
         video_processor_factory=DriverMonitorProcessor,
         rtc_configuration=RTC_CONFIG,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
+        media_stream_constraints={"video": True, "audio": False},  # audio disabled for optimisation
+        async_processing=True,  # enable async callback to avoid blocking
     )
-
     # Refresh metrics while stream is active
     if webrtc_ctx.state.playing:
         if not stats.get("start_time"):
@@ -257,6 +267,11 @@ with tab2:
             stats["attendance_logged"] = False
 
         render_metrics()
+
+        vp = webrtc_ctx.video_processor
+
+        if vp and getattr(vp, "drowsy_start", None) is not None:
+            stats["drowsy_time"] += time.time() - vp.drowsy_start
 
     elif stats.get("start_time") and not stats.get("end_time"):
         stats["end_time"] = time.time()
@@ -276,7 +291,67 @@ with tab2:
     """)
 
 
+# TAB 3: ADMIN (Attendance CSV Viewer)
 with tab3:
+    st.subheader("📋 Admin: Attendance Logs")
+
+    # Correct Attendance folder path (same as face_detection.py)
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    attendance_dir = os.path.join(BASE_DIR, "attendance_system", "Attendance")
+
+    # Load files
+    if os.path.exists(attendance_dir):
+        files = sorted(
+            [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
+            reverse=True  # latest first
+        )
+
+        if not files:
+            st.info("No attendance records found yet.")
+        else:
+            # Dropdown instead of file uploader
+            selected_file = st.selectbox("Select Attendance File", files)
+
+            file_path = os.path.join(attendance_dir, selected_file)
+
+            try:
+                df = pd.read_csv(file_path)
+                df.columns = df.columns.str.strip()
+
+                st.success(f"Showing: {selected_file}")
+
+                # Display like table (similar to Treeview)
+                st.dataframe(df, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Failed to load file: {e}")
+
+    else:
+        st.warning("Attendance folder not found.")
+
+
+    # Quick View (Latest Attendance)
+    st.markdown("### 🟢 Latest Attendance (Auto View)")
+
+    if os.path.exists(attendance_dir):
+        files = sorted(
+            [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
+            reverse=True
+        )
+        if files:
+            latest_file = os.path.join(attendance_dir, files[0])
+
+            try:
+                df_latest = pd.read_csv(latest_file)
+                df_latest.columns = df_latest.columns.str.strip()
+
+                st.write(f"Latest file: **{files[0]}**")
+                st.dataframe(df_latest.tail(10), use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Error reading latest file: {e}")
+
+with tab4:
     st.markdown(
 """<div class="about-wrapper">
 
