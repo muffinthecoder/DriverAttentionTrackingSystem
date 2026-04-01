@@ -2,6 +2,7 @@
 # Type "python src/phone_detection/phone_detection.py " on the terminal to run it individually
 # This code also contains a simple GUI in order to test just this unit alone later.
 # Code provided by: Fatima Faisal
+# Edited by: Pooja Gurnani
 
 #Imports
 import cv2
@@ -38,11 +39,23 @@ def play_beep():
 
 # Lazy-load the YOLO model once
 _yolo_model = None
+_base_model = None
+
+def _get_base_model():
+    global _base_model
+    if _base_model is None:
+        _base_model = YOLO(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "yolov8n.pt"
+        ))
+    return _base_model
 
 def _get_model():
     global _yolo_model
     if _yolo_model is None:
-        _yolo_model = YOLO("yolov8n.pt")
+        _yolo_model = YOLO(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "runs", "phone_finetune_v23", "weights", "best.pt"
+        ))
     return _yolo_model
 
 
@@ -80,8 +93,13 @@ def process_phone_frame(frame, alerts_flags=None):
 
     # YOLO runs every 3rd frame only
     model = _get_model()
+    base_model = _get_base_model()
     _last_person_boxes = []
-    results = model(frame, verbose=False, conf=0.20, iou=0.5)
+
+    # Fine-tuned model for phone
+    results = model(frame, verbose=False, conf=0.55, iou=0.5)
+    # Base model for person
+    base_results = base_model(frame, verbose=False, conf=0.5, iou=0.5)
 
     phone_detected = False
     current_boxes = []
@@ -91,13 +109,16 @@ def process_phone_frame(frame, alerts_flags=None):
             cls_id = int(box.cls[0])
             class_name = model.names[cls_id]
             confidence = float(box.conf[0])
-
-            if class_name in ["cell phone", "phone"] and confidence > 0.20:
+            if class_name == "phone" and confidence > 0.55:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 phone_detected = True
                 current_boxes.append((int(x1), int(y1), int(x2), int(y2), confidence))
-
-            elif class_name == "person" and confidence > 0.5:
+    for r in base_results:
+        for box in r.boxes:
+            cls_id = int(box.cls[0])
+            class_name = base_model.names[cls_id]
+            confidence = float(box.conf[0])
+            if class_name == "person" and confidence > 0.5:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 _last_person_boxes.append((int(x1), int(y1), int(x2), int(y2), confidence))
 
