@@ -6,3 +6,8 @@ __pycache__/
 .vscode/
 models/*.pt
 models/*.pkl
+.venv/
+src/attendance_system/TrainingImage/
+src/attendance_dataset/src/attendance_system/TrainingImageLabel/Trainner.yml
+DriverDetails.csv
+src/attendance_system/TrainingImage/
