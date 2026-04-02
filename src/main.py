@@ -1,6 +1,8 @@
 # main.py
 
+
 # STANDARD LIBRARIES
+
 
 import sys
 import os
@@ -17,343 +19,399 @@ import numpy as np
 import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
+
 # SUBSYSTEMS
 from phone_detection.phone_detection import process_phone_frame
 from drowsiness_detection.drowsiness import process_drowsiness_frame
 from attendance_system.face_detection import (
-    TakeImages,
-    TrainImages,
-    process_attendance_frame
+   TakeImages,
+   TrainImages,
+   process_attendance_frame
 )
+
 
 # logo
 logo_path = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "..",
-    "assets",
-    "logo.png"
+   os.path.dirname(os.path.abspath(__file__)),
+   "..",
+   "assets",
+   "logo.png"
 )
 # PAGE CONFIG
 st.set_page_config(page_title="Driver Attention Tracking System (DATS+)", layout="wide")
 
+
 # LOAD CSS
 def load_css():
-    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "style.css")
-    with open(css_path) as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+   css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "style.css")
+   with open(css_path) as f:
+       st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
 
 load_css()
 
 
-
 # HEADER
-
 st.markdown("""
 <div class="dms-header">
-    <div>
-        <h1 class="dms-title">Driver Attention Tracking System (DATS+)</h1>
-        <p class="dms-subtitle">AI-powered Safety Dashboard</p>
-    </div>
+   <div>
+       <h1 class="dms-title">Driver Attention Tracking System (DATS+)</h1>
+       <p class="dms-subtitle">AI-powered Safety Dashboard</p>
+   </div>
 </div>
 """, unsafe_allow_html=True)
+
 
 # TABS
 tab1, tab2, tab3, tab4 = st.tabs(["📸 Register Face", "📊 Monitoring", "👤 Admin", "👥 About Us"])
 
 
-
+# ─────────────────────────────────────────────
 # TAB 1: FACE REGISTRATION
-
+# ─────────────────────────────────────────────
 
 class RegisterProcessor(VideoProcessorBase):
     def __init__(self):
-        self.frame = None
+        self.frame       = None
+        self.capturing   = False
+        self.saved_count = 0
+        self.done        = False
+        self.user_id     = ""
+        self.user_name   = ""
+        self.serial      = 0
+        self._detector   = cv2.CascadeClassifier(
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "attendance_system",
+                "haarcascade_frontalface_default.xml"
+            )
+        )
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         self.frame = img
+
+        # Passively collect frames when capturing flag is set
+        if self.capturing and not self.done:
+            gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = self._detector.detectMultiScale(gray, 1.3, 5)
+            for (x, y, w, h) in faces:
+                self.saved_count += 1
+                img_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "attendance_system", "TrainingImage",
+                    f"{self.user_name}.{self.serial}.{self.user_id}.{self.saved_count}.jpg"
+                )
+                cv2.imwrite(img_path, gray[y:y + h, x:x + w])
+
+            if self.saved_count >= 100:
+                self.capturing = False
+                self.done      = True
+
+                # Save to CSV once done — FIX: no empty padding columns
+                csv_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "attendance_system", "DriverDetails", "DriverDetails.csv"
+                )
+                row = [self.serial, self.user_id, self.user_name]
+                file_exists = os.path.isfile(csv_path) and os.path.getsize(csv_path) > 0
+
+                with open(csv_path, 'a+', newline='', encoding='utf-8-sig') as f:
+                    import csv
+                    writer = csv.writer(f)
+
+                    if not file_exists:
+                        writer.writerow(['SERIAL NO.', 'ID', 'NAME'])  # ✅ ADD HEADER
+
+                    writer.writerow(row)
+
         return frame
 
+
 if "show_camera" not in st.session_state:
-    st.session_state.show_camera = False
+   st.session_state.show_camera = False
+
 
 with tab1:
-    st.subheader("Register Driver")
-    registration_count_placeholder = st.empty()  # this replaces 'message'
+   st.subheader("Register Driver")
+   registration_count_placeholder = st.empty()
 
-    user_id   = st.text_input("Enter ID")
-    user_name = st.text_input("Enter Name")
+   user_id   = st.text_input("Enter ID")
+   user_name = st.text_input("Enter Name")
 
-    st.info("📸 Camera is live. Click 'Start Capturing' to begin registering your face.")
-    if st.button("Open Camera"):
-        if user_id and user_name:
-            st.session_state.show_camera = True
-        else:
-            st.warning("Enter ID and Name")
+   st.info("📸 Camera is live. Click 'Start Capturing' to begin registering your face.")
 
-    if st.session_state.show_camera:
-        st.markdown("### Camera Active")
+   if st.button("Open Camera"):
+       if user_id and user_name:
+           st.session_state.show_camera = True
+       else:
+           st.warning("Enter ID and Name")
 
-        RTC_CONFIG = RTCConfiguration({
-            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-        })
+   if st.session_state.show_camera:
+       st.markdown("### Camera Active")
 
-        ctx = webrtc_streamer(
-            key="register",
-            video_processor_factory=RegisterProcessor,
-            rtc_configuration=RTC_CONFIG,
-            media_stream_constraints={"video": True, "audio": False},
-        )
+       RTC_CONFIG = RTCConfiguration({
+           "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+       })
 
-        if st.button("Capture Images"):
-            if ctx.video_processor:
-                success, msg = TakeImages(
-                    user_id,
-                    user_name,
-                    ctx.video_processor
-                )
+       ctx = webrtc_streamer(
+           key="register",
+           video_processor_factory=RegisterProcessor,
+           rtc_configuration=RTC_CONFIG,
+           media_stream_constraints={"video": True, "audio": False},
+       )
 
-                if success:
-                    st.success(msg)
-                    st.session_state.show_camera = False
-                else:
-                    st.error(msg)
+       if st.button("Start Capturing"):
+           if ctx and ctx.video_processor:
+               if user_id and user_name:
+                   vp = ctx.video_processor
+                   # Configure the processor then flip the flag — no blocking loop
+                   success, msg = TakeImages(user_id, user_name, vp)
+                   if success:
+                       st.info(msg + " — keep your face visible to the camera...")
+                   else:
+                       st.error(msg)
+               else:
+                   st.warning("Enter ID and Name first")
+           else:
+               st.warning("Camera not ready yet — wait a moment and try again")
 
-    if st.button("Train Model"):
-        success, msg = TrainImages(reg_placeholder=registration_count_placeholder)
-        if success:
-            st.success(msg)
-        else:
-            st.error(msg)
+       # Poll: show success once recv() finishes collecting 100 frames
+       if ctx and ctx.video_processor and ctx.video_processor.done:
+           st.success(f"✅ Images captured for {user_name}! Now click 'Train Model'.")
+           st.session_state.show_camera = False
 
-    st.markdown("""
-    <div style="
-        background-color:#f0f6ff;
-        padding:15px;
-        border-radius:10px;
-        border-left:5px solid #4a90e2;
-        margin-bottom:15px;
-    ">
-    <h4 style="margin-bottom:8px;">📘 How Registration Works</h4>
-    <p style="margin:0; font-size:14px;">
-    To enable automatic attendance tracking, you must first register the driver's face.<br><br>
+   if st.button("Train Model"):
+       success, msg = TrainImages(reg_placeholder=registration_count_placeholder)
+       if success:
+           st.success(msg)
+       else:
+           st.error(msg)
 
-    <strong>Steps:</strong><br>
-    1️⃣ Enter Driver ID and Name<br>
-    2️⃣ Click <strong>"Capture Images"</strong> to open the camera<br>
-    3️⃣ Click <strong>"Start Capturing"</strong> to collect face images<br>
-    4️⃣ Click <strong>"Train Model"</strong> to save the profile<br><br>
+   st.markdown("""
+   <div style="
+       background-color:#f0f6ff;
+       padding:15px;
+       border-radius:10px;
+       border-left:5px solid #4a90e2;
+       margin-bottom:15px;
+   ">
+   <h4 style="margin-bottom:8px;">📘 How Registration Works</h4>
+   <p style="margin:0; font-size:14px;">
+   To enable automatic attendance tracking, you must first register the driver's face.<br><br>
 
-    ⚠️ <strong>Note:</strong> You need to click capture twice — first to open the camera, then to start capturing images.
-    </p>
-    </div>
-    """, unsafe_allow_html=True)
+   <strong>Steps:</strong><br>
+   1️⃣ Enter Driver ID and Name<br>
+   2️⃣ Click <strong>"Open Camera"</strong> to start the camera<br>
+   3️⃣ Click <strong>"Start Capturing"</strong> to collect face images<br>
+   4️⃣ Wait for the success message, then click <strong>"Train Model"</strong> to save the profile<br><br>
 
+   ⚠️ <strong>Note:</strong> Keep your face clearly visible during capture. The system collects 100 face samples automatically.
+   </p>
+   </div>
+   """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
 # TAB 2: MONITORING
+# ─────────────────────────────────────────────
 with tab2:
 
-    # Live metric placeholders
-    col1, col2, col3 = st.columns(3)
-    phone_placeholder  = col1.empty()
-    drowsy_placeholder = col2.empty()
-    attend_placeholder = col3.empty()
+   # Live metric placeholders
+   col1, col2, col3 = st.columns(3)
+   phone_placeholder  = col1.empty()
+   drowsy_placeholder = col2.empty()
+   attend_placeholder = col3.empty()
 
-    def render_metrics():
-        phone_placeholder.metric("Phone Time (s)",  f"{stats['phone_time']:.1f}")
-        drowsy_placeholder.metric("Drowsy Time (s)", f"{stats['drowsy_time']:.1f}")
-        attend_placeholder.metric("Attendance",      "Yes" if stats['attendance_logged'] else "No")
+   def render_metrics():
+       phone_placeholder.metric("Phone Time (s)",  f"{stats['phone_time']:.1f}")
+       drowsy_placeholder.metric("Drowsy Time (s)", f"{stats['drowsy_time']:.1f}")
+       attend_placeholder.metric("Attendance",      "Yes" if stats['attendance_logged'] else "No")
 
-    render_metrics()
+   render_metrics()
+
+   st.markdown("### Live Feed")
+
+   # Shared alert flags (accessed by the video processor)
+   if "alerts_flags" not in st.session_state:
+       st.session_state.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
+
+   # WEBRTC VIDEO PROCESSOR
+   class DriverMonitorProcessor(VideoProcessorBase):
+       def __init__(self):
+           self.frame_count = 0
+           self.attendance_done = False
+           self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
+           self.drowsy_start = None
+
+       def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+           try:
+               img = frame.to_ndarray(format="bgr24")
+               self.frame_count += 1
+
+               # -------------------------
+               # PHASE 1: ATTENDANCE ONLY
+               # -------------------------
+               if not self.attendance_done:
+                   if self.frame_count % 10 == 0:  # process every 10 frames
+                       try:
+                           small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+                           result = process_attendance_frame(small_img, self.alerts_flags)
+                           if isinstance(result, tuple) and len(result) == 2:
+                               img, status = result
+                           else:
+                               img = result
+                               status = {}
+                           status = status or {}
+
+                           if status.get("recognized", False):
+                               self.attendance_done = True
+                               stats["attendance_logged"] = True
+                               print("✅ Attendance marked successfully")
+                           elif self.frame_count > 200:
+                               self.attendance_done = True
+                               print("⚠️ Attendance not recognized, moving to monitoring")
+                       except Exception as e:
+                           print("⚠️ Attendance error:", e)
+
+                   # Return frame only for attendance phase
+                   return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+               # -------------------------
+               # PHASE 2: MONITORING (Phone + Drowsiness)
+               # -------------------------
+               if self.frame_count % 3 == 0:  # throttle monitoring for performance
+                   try:
+                       # Downscale for speed
+                       small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+
+                       # Phone detection
+                       small_img = process_phone_frame(small_img, self.alerts_flags)
+
+                       # Drowsiness detection
+                       small_img, drowsy_status = process_drowsiness_frame(small_img, self.alerts_flags)
+
+                       if drowsy_status and drowsy_status.get("drowsy", False):
+                           if self.drowsy_start is None:
+                               self.drowsy_start = time.time()
+                       else:
+                           if self.drowsy_start is not None:
+                               stats["drowsy_time"] += time.time() - self.drowsy_start
+                               self.drowsy_start = None
+
+                       # Upscale back to original for display
+                       img = cv2.resize(small_img, (img.shape[1], img.shape[0]))
+                   except Exception as e:
+                       print("⚠️ Monitoring error:", e)
+
+               return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+           except Exception as e:
+               print("Error in recv:", e)
+               return frame
+
+   # ICE/STUN config
+   RTC_CONFIG = RTCConfiguration({
+       "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+   })
+
+   webrtc_ctx = webrtc_streamer(
+       key="driver-monitor",
+       video_processor_factory=DriverMonitorProcessor,
+       rtc_configuration=RTC_CONFIG,
+       media_stream_constraints={"video": True, "audio": False},
+       async_processing=True,
+   )
+
+   # Refresh metrics while stream is active
+   if webrtc_ctx.state.playing:
+       if not stats.get("start_time"):
+           stats["start_time"] = time.time()
+           stats["phone_time"]        = 0.0
+           stats["drowsy_time"]       = 0.0
+           stats["attendance_logged"] = False
+
+       render_metrics()
+
+       vp = webrtc_ctx.video_processor
+
+       if vp and getattr(vp, "drowsy_start", None) is not None:
+           stats["drowsy_time"] += time.time() - vp.drowsy_start
+
+   elif stats.get("start_time") and not stats.get("end_time"):
+       stats["end_time"] = time.time()
+       render_metrics()
+
+   # SESSION REPORT
+   st.markdown("### Session Report")
+   duration = 0.0
+   if stats.get("start_time") and stats.get("end_time"):
+       duration = stats["end_time"] - stats["start_time"]
+
+   st.write(f"""
+   - **Phone Usage Time:** {stats['phone_time']:.2f} sec 
+   - **Drowsiness Time:** {stats['drowsy_time']:.2f} sec 
+   - **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"} 
+   - **Session Duration:** {duration:.2f} sec 
+   """)
 
 
-    st.markdown("### Live Feed")
-
-    # Shared alert flags (accessed by the video processor)
-    if "alerts_flags" not in st.session_state:
-        st.session_state.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
-
-    # WEBRTC VIDEO PROCESSOR
-    class DriverMonitorProcessor(VideoProcessorBase):
-        def __init__(self):
-            self.frame_count = 0
-            self.attendance_done = False
-            self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
-            self.drowsy_start = None
-
-
-        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-            try:
-                img = frame.to_ndarray(format="bgr24")
-                self.frame_count += 1
-
-                # -------------------------
-                # PHASE 1: ATTENDANCE ONLY
-                # -------------------------
-                if not self.attendance_done:
-                    if self.frame_count % 10 == 0:  # process every 10 frames
-                        try:
-                            small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
-                            result = process_attendance_frame(small_img, self.alerts_flags)
-                            if isinstance(result, tuple) and len(result) == 2:
-                                img, status = result
-                            else:
-                                img = result
-                                status = {}
-                            status = status or {}
-
-                            if status.get("recognized", False):
-                                self.attendance_done = True
-                                stats["attendance_logged"] = True
-                                print("✅ Attendance marked successfully")
-                            elif self.frame_count > 200:
-                                self.attendance_done = True
-                                print("⚠️ Attendance not recognized, moving to monitoring")
-                        except Exception as e:
-                            print("⚠️ Attendance error:", e)
-
-                    # Return frame only for attendance phase
-                    return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-                # -------------------------
-                # PHASE 2: MONITORING (Phone + Drowsiness)
-                # -------------------------
-                if self.frame_count % 3 == 0:  # throttle monitoring for performance
-                    try:
-                        # Downscale for speed
-                        small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
-
-                        # Phone detection
-                        small_img = process_phone_frame(small_img, self.alerts_flags)
-
-                        # Drowsiness detection (uses the fixed version with timers)
-                        small_img, drowsy_status = process_drowsiness_frame(small_img, self.alerts_flags)
-
-                        #
-                        if drowsy_status and drowsy_status.get("drowsy", False):
-                            if self.drowsy_start is None:
-                                self.drowsy_start = time.time()
-                        else:
-                            if self.drowsy_start is not None:
-                                stats["drowsy_time"] += time.time() - self.drowsy_start
-                                self.drowsy_start = None
-
-                        # Upscale back to original for display
-                        img = cv2.resize(small_img, (img.shape[1], img.shape[0]))
-                    except Exception as e:
-                        print("⚠️ Monitoring error:", e)
-
-                return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-            except Exception as e:
-                print("Error in recv:", e)
-                return frame
-    # ICE/STUN config — needed for WebRTC to work on most networks
-    RTC_CONFIG = RTCConfiguration({
-        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-    })
-
-    webrtc_ctx = webrtc_streamer(
-        key="driver-monitor",
-        video_processor_factory=DriverMonitorProcessor,
-        rtc_configuration=RTC_CONFIG,
-        media_stream_constraints={"video": True, "audio": False},  # audio disabled for optimisation
-        async_processing=True,  # enable async callback to avoid blocking
-    )
-    # Refresh metrics while stream is active
-    if webrtc_ctx.state.playing:
-        if not stats.get("start_time"):
-            stats["start_time"] = time.time()
-            stats["phone_time"]        = 0.0
-            stats["drowsy_time"]       = 0.0
-            stats["attendance_logged"] = False
-
-        render_metrics()
-
-        vp = webrtc_ctx.video_processor
-
-        if vp and getattr(vp, "drowsy_start", None) is not None:
-            stats["drowsy_time"] += time.time() - vp.drowsy_start
-
-    elif stats.get("start_time") and not stats.get("end_time"):
-        stats["end_time"] = time.time()
-        render_metrics()
-
-    # SESSION REPORT
-    st.markdown("### Session Report")
-    duration = 0.0
-    if stats.get("start_time") and stats.get("end_time"):
-        duration = stats["end_time"] - stats["start_time"]
-
-    st.write(f"""
-    - **Phone Usage Time:** {stats['phone_time']:.2f} sec  
-    - **Drowsiness Time:** {stats['drowsy_time']:.2f} sec  
-    - **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"}  
-    - **Session Duration:** {duration:.2f} sec  
-    """)
-
-
+# ─────────────────────────────────────────────
 # TAB 3: ADMIN (Attendance CSV Viewer)
+# ─────────────────────────────────────────────
 with tab3:
-    st.subheader("📋 Admin: Attendance Logs")
+   st.subheader("📋 Admin: Attendance Logs")
 
-    # Correct Attendance folder path (same as face_detection.py)
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    attendance_dir = os.path.join(BASE_DIR, "attendance_system", "Attendance")
+   BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+   attendance_dir = os.path.join(BASE_DIR, "attendance_system", "Attendance")
 
-    # Load files
-    if os.path.exists(attendance_dir):
-        files = sorted(
-            [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
-            reverse=True  # latest first
-        )
+   # Auto-create the folder if it doesn't exist yet
+   os.makedirs(attendance_dir, exist_ok=True)
 
-        if not files:
-            st.info("No attendance records found yet.")
-        else:
-            # Dropdown instead of file uploader
-            selected_file = st.selectbox("Select Attendance File", files)
+   files = sorted(
+       [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
+       reverse=True
+   )
 
-            file_path = os.path.join(attendance_dir, selected_file)
+   if not files:
+       st.info("No attendance records found yet.")
+   else:
+       selected_file = st.selectbox("Select Attendance File", files)
+       file_path = os.path.join(attendance_dir, selected_file)
 
-            try:
-                df = pd.read_csv(file_path)
-                df.columns = df.columns.str.strip()
+       try:
+           df = pd.read_csv(file_path)
+           df.columns = df.columns.str.strip()
+           st.success(f"Showing: {selected_file}")
+           st.dataframe(df, use_container_width=True)
+       except Exception as e:
+           st.error(f"Failed to load file: {e}")
 
-                st.success(f"Showing: {selected_file}")
+   # Quick View (Latest Attendance)
+   st.markdown("### 🟢 Latest Attendance (Auto View)")
 
-                # Display like table (similar to Treeview)
-                st.dataframe(df, use_container_width=True)
+   files = sorted(
+       [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
+       reverse=True
+   )
+   if files:
+       latest_file = os.path.join(attendance_dir, files[0])
+       try:
+           df_latest = pd.read_csv(latest_file)
+           df_latest.columns = df_latest.columns.str.strip()
+           st.write(f"Latest file: **{files[0]}**")
+           st.dataframe(df_latest.tail(10), use_container_width=True)
+       except Exception as e:
+           st.error(f"Error reading latest file: {e}")
+   else:
+       st.info("No attendance records found yet.")
 
-            except Exception as e:
-                st.error(f"Failed to load file: {e}")
 
-    else:
-        st.warning("Attendance folder not found.")
-
-
-    # Quick View (Latest Attendance)
-    st.markdown("### 🟢 Latest Attendance (Auto View)")
-
-    if os.path.exists(attendance_dir):
-        files = sorted(
-            [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
-            reverse=True
-        )
-        if files:
-            latest_file = os.path.join(attendance_dir, files[0])
-
-            try:
-                df_latest = pd.read_csv(latest_file)
-                df_latest.columns = df_latest.columns.str.strip()
-
-                st.write(f"Latest file: **{files[0]}**")
-                st.dataframe(df_latest.tail(10), use_container_width=True)
-
-            except Exception as e:
-                st.error(f"Error reading latest file: {e}")
-
+# ─────────────────────────────────────────────
+# TAB 4: ABOUT US
+# ─────────────────────────────────────────────
 with tab4:
-    st.markdown(
+   st.markdown(
 """<div class="about-wrapper">
 
 <h2 class="about-title">About Team Attenzen</h2>
@@ -434,25 +492,27 @@ further validation and regulatory approval.</span></p>
 </div>""", unsafe_allow_html=True)
 
 
+# ─────────────────────────────────────────────
 # FOOTER
-#logo added to website
+# ─────────────────────────────────────────────
 st.markdown("---")
 with open(logo_path, "rb") as f:
-    logo_base64 = base64.b64encode(f.read()).decode()
+   logo_base64 = base64.b64encode(f.read()).decode()
 
 st.markdown(f"""
 <div style="text-align:center; margin-top:0.5px; margin-bottom:0.5px;">
-    <img src="data:image/png;base64,{logo_base64}" 
-         style="height:300px; margin-bottom:5px;">
+   <img src="data:image/png;base64,{logo_base64}"
+        style="height:300px; margin-bottom:5px;">
 </div>
 """, unsafe_allow_html=True)
+
 st.markdown("""
 <div class="footer">
-    <p>Driver Attention Tracking System (DATS+) &nbsp;|&nbsp; AI-powered Safety Dashboard</p>
-    <p>Built by &nbsp;
-        <strong>Fatima Faisal</strong> &nbsp;·&nbsp;
-        <strong>Minal Haque</strong> &nbsp;·&nbsp;
-        <strong>Pooja Gurnani</strong>
-    </p>
+   <p>Driver Attention Tracking System (DATS+) &nbsp;|&nbsp; AI-powered Safety Dashboard</p>
+   <p>Built by &nbsp;
+       <strong>Fatima Faisal</strong> &nbsp;·&nbsp;
+       <strong>Minal Haque</strong> &nbsp;·&nbsp;
+       <strong>Pooja Gurnani</strong>
+   </p>
 </div>
 """, unsafe_allow_html=True)
