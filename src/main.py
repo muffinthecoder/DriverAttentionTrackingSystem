@@ -1,9 +1,11 @@
-# main.py
+# Unit: ICT 304
+# Final Project - DATS+ System
+# This is the main.py which contains the code for the streamlit dashboard.
+# All three subsystems are integrated here.
+# Code by: Fatima Faisal and Minal Haque
 
 
 # STANDARD LIBRARIES
-
-
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -380,7 +382,7 @@ with tab3:
        file_path = os.path.join(attendance_dir, selected_file)
 
        try:
-           df = pd.read_csv(file_path)
+           df = pd.read_csv(file_path, encoding='utf-8-sig')
            df.columns = df.columns.str.strip()
            st.success(f"Showing: {selected_file}")
            st.dataframe(df, use_container_width=True)
@@ -397,7 +399,7 @@ with tab3:
    if files:
        latest_file = os.path.join(attendance_dir, files[0])
        try:
-           df_latest = pd.read_csv(latest_file)
+           df_latest = pd.read_csv(latest_file, encoding='utf-8-sig')
            df_latest.columns = df_latest.columns.str.strip()
            st.write(f"Latest file: **{files[0]}**")
            st.dataframe(df_latest.tail(10), use_container_width=True)
