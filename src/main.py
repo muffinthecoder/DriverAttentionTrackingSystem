@@ -135,6 +135,28 @@ if "show_camera" not in st.session_state:
 
 
 with tab1:
+   st.markdown("""
+   <div style="
+       background-color:#f0f6ff;
+       padding:15px;
+       border-radius:10px;
+       border-left:5px solid #4a90e2;
+       margin-bottom:15px;
+   ">
+   <h4 style="margin-bottom:8px;">📘 How Registration Works</h4>
+   <p style="margin:0; font-size:14px;">
+   To enable automatic attendance tracking, you must first register the driver's face.<br><br>
+
+   <strong>Steps:</strong><br>
+   1️⃣ Enter Driver ID and Name<br>
+   2️⃣ Click <strong>"Open Camera"</strong> and then the <strong>"Start"</strong> button to start the camera<br>
+   3️⃣ Click <strong>"Start Capturing"</strong> to collect face images<br>
+   4️⃣ Wait for a few seconds then click <strong>"Train Model"</strong> to save the profile<br><br>
+
+   ⚠️ <strong>Note:</strong> Keep your face clearly visible during capture. The system collects the face samples automatically.
+   </p>
+   </div>
+   """, unsafe_allow_html=True)
    st.subheader("Register Driver")
    registration_count_placeholder = st.empty()
 
@@ -190,28 +212,7 @@ with tab1:
        else:
            st.error(msg)
 
-   st.markdown("""
-   <div style="
-       background-color:#f0f6ff;
-       padding:15px;
-       border-radius:10px;
-       border-left:5px solid #4a90e2;
-       margin-bottom:15px;
-   ">
-   <h4 style="margin-bottom:8px;">📘 How Registration Works</h4>
-   <p style="margin:0; font-size:14px;">
-   To enable automatic attendance tracking, you must first register the driver's face.<br><br>
 
-   <strong>Steps:</strong><br>
-   1️⃣ Enter Driver ID and Name<br>
-   2️⃣ Click <strong>"Open Camera"</strong> to start the camera<br>
-   3️⃣ Click <strong>"Start Capturing"</strong> to collect face images<br>
-   4️⃣ Wait for the success message, then click <strong>"Train Model"</strong> to save the profile<br><br>
-
-   ⚠️ <strong>Note:</strong> Keep your face clearly visible during capture. The system collects 100 face samples automatically.
-   </p>
-   </div>
-   """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -345,17 +346,54 @@ with tab2:
        render_metrics()
 
    # SESSION REPORT
-   st.markdown("### Session Report")
    duration = 0.0
    if stats.get("start_time") and stats.get("end_time"):
        duration = stats["end_time"] - stats["start_time"]
 
-   st.write(f"""
-   - **Phone Usage Time:** {stats['phone_time']:.2f} sec 
-   - **Drowsiness Time:** {stats['drowsy_time']:.2f} sec 
-   - **Attendance Logged:** {"Yes" if stats['attendance_logged'] else "No"} 
-   - **Session Duration:** {duration:.2f} sec 
-   """)
+   attendance_text = "Yes" if stats['attendance_logged'] else "No"
+   attendance_color = "#16a34a" if stats['attendance_logged'] else "#dc2626"
+
+   phone_time = f"{stats['phone_time']:.1f}"
+   drowsy_time = f"{stats['drowsy_time']:.1f}"
+   duration_s = f"{duration:.1f}"
+
+   html = f"""
+   <div style="padding:0.5rem 0;">
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
+       <div style="width:3px;height:20px;background:#2563eb;border-radius:2px;"></div>
+       <span style="font-size:15px;font-weight:600;color:#1a2b4a;">Session Report</span>
+       <span style="margin-left:auto;font-size:12px;color:#6b84a8;background:#eef3fb;border:1px solid #dbe6f5;border-radius:6px;padding:3px 10px;">Completed</span>
+     </div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+       <div style="background:#f0f4f9;border-radius:8px;padding:1rem;">
+         <p style="font-size:11px;color:#6b84a8;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.06em;">Phone usage</p>
+         <p style="font-size:26px;font-weight:600;margin:0;color:#2563eb;">{phone_time}</p>
+         <p style="font-size:12px;color:#9bacc4;margin:4px 0 0 0;">seconds detected</p>
+       </div>
+       <div style="background:#f0f4f9;border-radius:8px;padding:1rem;">
+         <p style="font-size:11px;color:#6b84a8;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.06em;">Drowsiness</p>
+         <p style="font-size:26px;font-weight:600;margin:0;color:#dc2626;">{drowsy_time}</p>
+         <p style="font-size:12px;color:#9bacc4;margin:4px 0 0 0;">seconds detected</p>
+       </div>
+       <div style="background:#f0f4f9;border-radius:8px;padding:1rem;">
+         <p style="font-size:11px;color:#6b84a8;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.06em;">Session duration</p>
+         <p style="font-size:26px;font-weight:600;margin:0;color:#1a2b4a;">{duration_s}</p>
+         <p style="font-size:12px;color:#9bacc4;margin:4px 0 0 0;">seconds total</p>
+       </div>
+       <div style="background:#f0f4f9;border-radius:8px;padding:1rem;">
+         <p style="font-size:11px;color:#6b84a8;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.06em;">Attendance</p>
+         <p style="font-size:26px;font-weight:600;margin:0;color:{attendance_color};">{attendance_text}</p>
+         <p style="font-size:12px;color:#9bacc4;margin:4px 0 0 0;">logged status</p>
+       </div>
+     </div>
+     <div style="border-top:1px solid #dbe6f5;padding-top:10px;display:flex;align-items:center;gap:6px;">
+       <div style="width:6px;height:6px;border-radius:50%;background:#16a34a;"></div>
+       <span style="font-size:12px;color:#9bacc4;">Report generated at end of session</span>
+     </div>
+   </div>
+   """
+
+   st.markdown(html, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -420,7 +458,7 @@ with tab4:
 <p class="about-subtitle">A student-led initiative building smarter, safer roads through AI.</p>
 
 <div class="about-card">
-<h3>🚗 The Problem We're Solving</h3>
+<h3>The Problem We're Solving</h3>
 <p>Driver fatigue and inattentiveness are among the leading causes of road accidents worldwide.
 In commercial transport — taxis, public buses, trams, delivery trucks — drivers often work long
 shifts with little oversight. Employers have no reliable way to know if a driver is alert, or
@@ -430,7 +468,7 @@ even present, at the wheel. Manual attendance systems are slow, error-prone, and
 </div>
 
 <div class="about-card">
-<h3>🧠 What This System Does</h3>
+<h3>What This System Does</h3>
 <p>The Driver Attention Tracking System (DATS) is a real-time, AI-powered monitoring platform
 designed as a <em>proof of concept</em> for commercial vehicle deployment. It combines three
 intelligent subsystems into a single unified dashboard:</p>
@@ -444,7 +482,7 @@ end of every drive — giving fleet operators a clear, timestamped record of dri
 </div>
 
 <div class="about-card">
-<h3>🚌 Real-World Applications</h3>
+<h3>Real-World Applications</h3>
 <p>While DATS is currently a proof of concept, the underlying technology is directly applicable to:</p>
 <ul>
 <li><strong>Ride-hailing & taxis</strong> — ensure drivers are who they claim to be and are alert throughout a trip.</li>
@@ -455,7 +493,7 @@ end of every drive — giving fleet operators a clear, timestamped record of dri
 </ul>
 </div>
 
-<h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 1.2rem;">👩‍💻 Meet the Team</h3>
+<h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 1.2rem;">Meet the Team</h3>
 
 <div class="team-grid">
 <div class="team-card">
@@ -472,7 +510,7 @@ cohesive pipeline. Developed the Phone detection model. Handled CSS theming and 
 <p class="team-role">Attendance & Face Recognition Engineer</p>
 <p>Designed and built the face recognition attendance subsystem using
 OpenCV's LBPH algorithm. Implemented driver registration, model training,
-and real-time identity verification with CSV-based logging.</p>
+and real-time identity verification with CSV-based logging. </p>
 </div>
 <div class="team-card">
 <div class="team-emoji">👩‍🎓</div>
@@ -480,7 +518,7 @@ and real-time identity verification with CSV-based logging.</p>
 <p class="team-role">Safety Detection & Alert Systems</p>
 <p>Developed the drowsiness detection module,
 combining facial landmark analysis and object detection to provide
-real-time safety alerts and session-level behavioural reporting.</p>
+real-time safety alerts and session-level behavioural reporting.Integrated the Attendance Subsystem into the final product.</p>
 </div>
 </div>
 
