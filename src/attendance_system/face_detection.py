@@ -591,8 +591,8 @@ if __name__ == '__main__':
     takeImg = ttk.Button(right_frame, text="Take Images", command=TakeImages)
     takeImg.pack(pady=10, fill="x")
 
-    trainImg = ttk.Button(right_frame, text="Save Profile", command=save_profile_callback)
-    trainImg.pack(pady=5, fill="x")
+
+
 
     message1 = ttk.Label(right_frame, text="1) Take Images  →  2) Save Profile")
     message1.pack(pady=10)
@@ -604,6 +604,10 @@ if __name__ == '__main__':
     def save_profile_callback():
         success, msg = TrainImages()
         message1.configure(text=msg)
+
+
+    trainImg = ttk.Button(right_frame, text="Save Profile", command=save_profile_callback)
+    trainImg.pack(pady=5, fill="x")
 
     menubar = tk.Menu(window)
     filemenu = tk.Menu(menubar, tearoff=0)
