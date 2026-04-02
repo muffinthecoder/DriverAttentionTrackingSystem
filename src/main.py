@@ -180,6 +180,7 @@ with tab2:
             self.alerts_flags = {"phone": False, "drowsy": False, "attendance": False}
             self.drowsy_start = None
 
+
         def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
             try:
                 img = frame.to_ndarray(format="bgr24")
