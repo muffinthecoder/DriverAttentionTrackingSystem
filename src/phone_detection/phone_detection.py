@@ -123,7 +123,7 @@ def process_phone_frame(frame, alerts_flags=None):
    _last_person_boxes = []
 
    # Fine-tuned model for phone
-   results = model(frame, verbose=False, conf=0.5, iou=0.5)
+   results = model(frame, verbose=False, conf=0.4, iou=0.5)
    # Base model for person
    base_results = base_model(frame, verbose=False, conf=0.5, iou=0.5)
    phone_detected = False
@@ -134,7 +134,7 @@ def process_phone_frame(frame, alerts_flags=None):
            cls_id = int(box.cls[0])
            class_name = model.names[cls_id]
            confidence = float(box.conf[0])
-           if class_name == "phone" and confidence > 0.5:
+           if class_name == "phone" and confidence > 0.4:
                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                phone_detected = True
                current_boxes.append((int(x1), int(y1), int(x2), int(y2), confidence))
