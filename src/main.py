@@ -32,26 +32,23 @@ from attendance_system.face_detection import (
 )
 
 
-# logo
+# logo imported
 logo_path = os.path.join(
    os.path.dirname(os.path.abspath(__file__)),
    "..",
    "assets",
    "logo.png"
 )
-# PAGE CONFIG
+# Page configuration
 st.set_page_config(page_title="Driver Attention Tracking System (DATS+)", layout="wide")
 
 
-# LOAD CSS
+# Load the CSS
 def load_css():
    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "style.css")
    with open(css_path) as f:
        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-
 load_css()
-
 
 # HEADER
 st.markdown("""
@@ -67,11 +64,7 @@ st.markdown("""
 # TABS
 tab1, tab2, tab3, tab4 = st.tabs(["📸 Register Face", "📊 Monitoring", "👤 Admin", "👥 About Us"])
 
-
-# ─────────────────────────────────────────────
 # TAB 1: FACE REGISTRATION
-# ─────────────────────────────────────────────
-
 class RegisterProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame       = None
@@ -129,10 +122,8 @@ class RegisterProcessor(VideoProcessorBase):
 
         return frame
 
-
 if "show_camera" not in st.session_state:
    st.session_state.show_camera = False
-
 
 with tab1:
    st.markdown("""
@@ -212,12 +203,7 @@ with tab1:
        else:
            st.error(msg)
 
-
-
-
-# ─────────────────────────────────────────────
 # TAB 2: MONITORING
-# ─────────────────────────────────────────────
 with tab2:
 
    # Live metric placeholders
@@ -252,9 +238,7 @@ with tab2:
                img = frame.to_ndarray(format="bgr24")
                self.frame_count += 1
 
-               # -------------------------
                # PHASE 1: ATTENDANCE ONLY
-               # -------------------------
                if not self.attendance_done:
                    if self.frame_count % 10 == 0:  # process every 10 frames
                        try:
@@ -280,9 +264,7 @@ with tab2:
                    # Return frame only for attendance phase
                    return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-               # -------------------------
                # PHASE 2: MONITORING (Phone + Drowsiness)
-               # -------------------------
                if self.frame_count % 3 == 0:  # throttle monitoring for performance
                    try:
                        # Downscale for speed
@@ -395,10 +377,7 @@ with tab2:
 
    st.markdown(html, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
 # TAB 3: ADMIN (Attendance CSV Viewer)
-# ─────────────────────────────────────────────
 with tab3:
    st.subheader("📋 Admin: Attendance Logs")
 
@@ -412,7 +391,6 @@ with tab3:
        [f for f in os.listdir(attendance_dir) if f.endswith(".csv")],
        reverse=True
    )
-
    if not files:
        st.info("No attendance records found yet.")
    else:
@@ -446,10 +424,7 @@ with tab3:
    else:
        st.info("No attendance records found yet.")
 
-
-# ─────────────────────────────────────────────
 # TAB 4: ABOUT US
-# ─────────────────────────────────────────────
 with tab4:
    st.markdown(
 """<div class="about-wrapper">
@@ -532,9 +507,7 @@ further validation and regulatory approval.</span></p>
 </div>""", unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
 # FOOTER
-# ─────────────────────────────────────────────
 st.markdown("---")
 with open(logo_path, "rb") as f:
    logo_base64 = base64.b64encode(f.read()).decode()
