@@ -19,7 +19,6 @@ import datetime
 import time
 import sys
 
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import stats, announce_violation
 
@@ -27,14 +26,12 @@ from utils import stats, announce_violation
 # This makes sure all files are always found relative to where face_detection.py is saved
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ─── CSV schema ───────────────────────────────────────────────────────────────
+# CSV schema
 # Three columns only — no empty padding columns.
 CSV_COLUMNS = ['SERIAL NO.', 'ID', 'NAME']
-# ──────────────────────────────────────────────────────────────────────────────
 
 def get_path(relative_path):
     return os.path.join(BASE_DIR, relative_path)
-
 
 #Functions
 def assure_path_exists(relative_path):
@@ -42,23 +39,19 @@ def assure_path_exists(relative_path):
     if not os.path.exists(full_path):
         os.makedirs(full_path)
 
-
 def tick():
     time_string = time.strftime('%H:%M:%S')
     clock.config(text=time_string)
     clock.after(200, tick)
 
-
 def contact():
     mess._show(title='Contact us', message="Please contact us on : 'xxxxxxxxxxxxx@gmail.com' ")
-
 
 def check_haarcascadefile():
     exists = os.path.isfile(get_path("haarcascade_frontalface_default.xml"))
     if not exists:
         mess._show(title='Some file missing', message='Please contact us for help')
         window.destroy()
-
 
 def save_pass():
     assure_path_exists("TrainingImageLabel")
@@ -95,7 +88,6 @@ def save_pass():
     mess._show(title='Password Changed', message='Password changed successfully!!')
     master.destroy()
 
-
 def change_pass():
     global master
     master = tk.Tk()
@@ -126,7 +118,6 @@ def change_pass():
     save1.place(x=10, y=120)
     master.mainloop()
 
-
 def psw():
     assure_path_exists("TrainingImageLabel")
     exists1 = os.path.isfile(get_path("TrainingImageLabel/psd.txt"))
@@ -152,16 +143,13 @@ def psw():
     else:
         mess._show(title='Wrong Password', message='You have entered wrong password')
 
-
 def clear():
     txt.delete(0, 'end')
     message1.configure(text="1)Take Images  >>>  2)Save Profile")
 
-
 def clear2():
     txt2.delete(0, 'end')
     message1.configure(text="1)Take Images  >>>  2)Save Profile")
-
 
 def update_registration_count():
     res = 0
@@ -172,7 +160,6 @@ def update_registration_count():
             rows = [r for r in reader if any(field.strip() for field in r)]
         res = max(0, len(rows) - 1)  # subtract header
     message.configure(text='Total Registrations till now  : ' + str(res))
-
 
 def _load_or_create_driver_csv():
     """
@@ -186,7 +173,6 @@ def _load_or_create_driver_csv():
             csv.writer(f).writerow(CSV_COLUMNS)
     return csv_path
 
-
 def _next_serial(csv_path):
     """Return the next available serial number (max existing + 1, min 1)."""
     serial = 0
@@ -196,7 +182,6 @@ def _next_serial(csv_path):
             rows = [r for r in reader if any(field.strip() for field in r)]
         serial = max(0, len(rows) - 1)   # subtract header row
     return serial + 1
-
 
 def TakeImages(user_id, user_name, processor=None):
     """Capture face images for registration (works with Streamlit)."""
@@ -249,10 +234,8 @@ def TakeImages(user_id, user_name, processor=None):
                 csv.writer(f).writerow([serial, Id, name])
 
             return True, f"Images Taken for ID: {Id}"
-
     except Exception as e:
         return False, f"Error: {str(e)}"
-
 
 def TrainImages(reg_placeholder=None):
     check_haarcascadefile()
@@ -282,7 +265,6 @@ def TrainImages(reg_placeholder=None):
 
     return True, "Profile Saved Successfully"
 
-
 def getImagesAndLabels(path):
     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
     faces = []
@@ -295,7 +277,6 @@ def getImagesAndLabels(path):
         faces.append(imageNp)
         Ids.append(ID)
     return faces, Ids
-
 
 def TrackImages():
     check_haarcascadefile()
@@ -386,11 +367,7 @@ def TrackImages():
 
     mess._show(title='Attendance Marked', message='Attendance marked successfully!')
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Shared helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _read_driver_csv(csv_path):
     """
     Read DriverDetails.csv robustly regardless of encoding or column name variations.
@@ -424,14 +401,12 @@ def _read_driver_csv(csv_path):
     print(df)
     return df
 
-
 # Shared state for process_attendance_frame()
 _att_recognizer       = None
 _att_face_cascade     = None
 _att_driver_df        = None
 _att_last_recognition = None
 _att_col_names        = ['Id', 'Name', 'Date', 'Time']
-
 
 def _att_load_models():
     """Lazy-load the recognizer and cascade once, on first call."""
@@ -466,7 +441,6 @@ def _att_load_models():
     print("✅ Driver data:\n", df)
 
     return True, "OK"
-
 
 def process_attendance_frame(frame, alerts_flags=None):
     """
@@ -564,9 +538,7 @@ def process_attendance_frame(frame, alerts_flags=None):
     return frame, status
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # GUI entry point — ONLY runs when executed directly, never on import
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     ts = time.time()
     date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
